@@ -1,15 +1,17 @@
 import { Component, ViewEncapsulation } from '@angular/core';
-import { AuthService } from '../auth.service';
+import { AuthService, RegisterRequest } from '../auth.service';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-login',
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.css'],
-  encapsulation: ViewEncapsulation.None  // ← IMPORTANT!
+  encapsulation: ViewEncapsulation.None
 })
 export class LoginComponent {
   showLogin = true;
   showVerification = false;
+  isLoading = false;
   
   loginData = { email: '', password: '' };
   registerData = {
@@ -23,12 +25,18 @@ export class LoginComponent {
   
   codeDigits = ['', '', '', '', '', ''];
   errors: any = {};
+  successMessage = '';
   
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private router: Router
+  ) {}
 
   onLogin() {
     this.errors = {};
+    this.successMessage = '';
     
+    // Validare
     if (!this.validateEmail(this.loginData.email)) {
       this.errors.loginEmail = 'Please enter a valid email address.';
       return;
@@ -39,19 +47,40 @@ export class LoginComponent {
       return;
     }
 
+    this.isLoading = true;
+
     this.authService.login(this.loginData.email, this.loginData.password).subscribe({
-      next: () => {
-        this.showVerification = true;
-        this.generateVerificationCode();
+      next: (response) => {
+        this.isLoading = false;
+        
+        // Redirect based on role
+        const role = response.user.rolNume;
+        if (role === 'admin') {
+          this.router.navigate(['/admin']);
+        } else if (role === 'angajator') {
+          this.router.navigate(['/angajator']);
+        } else {
+          this.router.navigate(['/angajat']);
+        }
       },
       error: (err) => {
-        this.errors.loginPassword = err.error?.message || 'Invalid credentials';
+        this.isLoading = false;
+        console.error('Eroare login:', err);
+        
+        if (err.status === 401) {
+          this.errors.loginPassword = 'Email or password incorrect';
+        } else if (err.error?.message) {
+          this.errors.loginPassword = err.error.message;
+        } else {
+          this.errors.loginPassword = 'An erorr occured. Please try again.';
+        }
       }
     });
   }
 
   onRegister() {
     this.errors = {};
+    this.successMessage = '';
     let isValid = true;
     
     if (!this.validateEmail(this.registerData.email)) {
@@ -82,32 +111,85 @@ export class LoginComponent {
     if (!this.registerData.birthdate) {
       this.errors.registerBirthdate = 'Birth date is required.';
       isValid = false;
+    } else {
+      // Verifică dacă utilizatorul are cel puțin 18 ani
+      const birthDate = new Date(this.registerData.birthdate);
+      const today = new Date();
+      const age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      
+      if (age < 18 || (age === 18 && monthDiff < 0) || 
+          (age === 18 && monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        this.errors.registerBirthdate = 'You must be at least 18.';
+        isValid = false;
+      }
     }
     
-    if (!isValid) return;
+    if (!isValid) {
+      return;
+    }
     
-    this.showVerification = true;
-    this.generateVerificationCode();
-  }
+    this.isLoading = true;
 
-  verifyCode() {
-    const code = this.codeDigits.join('');
-    
-    this.authService.verifyCode(this.loginData.email, code).subscribe({
-      next: () => {
-        alert('Login successful!');
+    const registerRequest: RegisterRequest = {
+      email: this.registerData.email,
+      parola: this.registerData.password,
+      nume: this.registerData.lastname,
+      prenume: this.registerData.firstname,
+      telefon: this.registerData.phone || undefined,
+      dataNastere: this.registerData.birthdate,
+      rolId: 2 // Default: angajat
+    };
+
+
+    this.authService.register(registerRequest).subscribe({
+      next: (response) => {
+        this.isLoading = false;
+        
+        this.successMessage = 'Cont creat cu succes! Redirecting...';
+        
+        setTimeout(() => {
+          const role = response.user.rolNume;
+          if (role === 'admin') {
+            this.router.navigate(['/admin']);
+          } else if (role === 'angajator') {
+            this.router.navigate(['/angajator']);
+          } else {
+            this.router.navigate(['/angajat']);
+          }
+        }, 1500);
       },
-      error: () => {
-        alert('Invalid verification code');
+      error: (err) => {
+        this.isLoading = false;
+        console.error('Eroare completă înregistrare:', err);
+        console.error('Status:', err.status);
+        console.error('Error body:', err.error);
+        
+        if (err.status === 0) {
+          this.errors.general = 'Nu se poate conecta la server. Verificați dacă backend-ul rulează.';
+        } else if (err.error?.message) {
+          this.errors.general = err.error.message;
+        } else if (err.error?.errors) {
+          Object.keys(err.error.errors).forEach(key => {
+            const errorKey = `register${key.charAt(0).toUpperCase() + key.slice(1)}`;
+            this.errors[errorKey] = err.error.errors[key][0];
+          });
+        } else if (err.error?.title) {
+          this.errors.general = err.error.title;
+        } else {
+          this.errors.general = 'A apărut o eroare. Vă rugăm încercați din nou.';
+        }
       }
     });
   }
 
+  verifyCode() {
+    const code = this.codeDigits.join('');
+    alert('Funcționalitatea de verificare email nu este implementată încă.');
+  }
+
   resendCode() {
-    this.authService.resendCode(this.loginData.email).subscribe(() => {
-      alert('Code resent to your email');
-      this.generateVerificationCode();
-    });
+    alert('Funcționalitatea de retrimitere cod nu este implementată încă.');
   }
 
   backToLogin() {
@@ -139,11 +221,5 @@ export class LoginComponent {
   private validatePhone(phone: string): boolean {
     const re = /^[0-9+\-\s()]{10,}$/;
     return re.test(phone);
-  }
-
-  private generateVerificationCode() {
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    console.log(`Verification code: ${code}`);
-    alert(`Verification code (simulated): ${code}`);
   }
 }
