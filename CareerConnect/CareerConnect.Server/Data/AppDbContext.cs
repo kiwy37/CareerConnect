@@ -11,6 +11,7 @@ namespace CareerConnect.Server.Data
 
         public DbSet<User> Users { get; set; }
         public DbSet<Rol> Roles { get; set; }
+        public DbSet<EmailVerificationCode> EmailVerificationCodes { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -27,6 +28,13 @@ namespace CareerConnect.Server.Data
                 .WithMany(r => r.Users)
                 .HasForeignKey(u => u.RolId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Configurare index pentru EmailVerificationCode
+            modelBuilder.Entity<EmailVerificationCode>()
+                .HasIndex(e => new { e.Email, e.VerificationType, e.IsUsed });
+
+            modelBuilder.Entity<EmailVerificationCode>()
+                .HasIndex(e => e.CreatedAt);
 
             // Seed roles
             modelBuilder.Entity<Rol>().HasData(

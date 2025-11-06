@@ -58,7 +58,12 @@ builder.Services.AddCors(options =>
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IVerificationService, VerificationService>();
 builder.Services.AddScoped<JwtHelper>();
+
+// Register Hosted Service pentru cleanup coduri expirate
+builder.Services.AddHostedService<VerificationCodeCleanupService>();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
