@@ -80,14 +80,13 @@ namespace CareerConnect.Server.Controllers
             return Ok(response);
         }
 
-        // NEW ENDPOINT - Add this method
-        [HttpPost("social-login")]
-        public async Task<ActionResult<AuthResponseDto>> SocialLogin([FromBody] SocialLoginDto socialLoginDto)
+        [HttpPost("linkedin-login")]
+        public async Task<ActionResult<AuthResponseDto>> LinkedInLogin([FromBody] LinkedInLoginDto linkedInLoginDto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var response = await _authService.SocialLoginAsync(socialLoginDto);
+            var response = await _authService.LinkedInLoginAsync(linkedInLoginDto);
             return Ok(response);
         }
     }

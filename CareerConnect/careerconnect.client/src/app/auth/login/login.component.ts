@@ -12,6 +12,11 @@ declare const google: any;
   encapsulation: ViewEncapsulation.None,
 })
 export class LoginComponent implements OnInit {
+  private linkedInConfig = {
+  clientId: '86ov51fct1q6am', // Your LinkedIn Client ID from appsettings.json
+  redirectUri: 'https://localhost:52623'
+};
+
   showLogin = true;
   showVerification = false;
   isLoading = false;
@@ -40,7 +45,13 @@ export class LoginComponent implements OnInit {
     // Inițializează SDK-urile pentru social login
     this.initFacebookSDK();
     this.initGoogleSDK();
+      this.initLinkedInSDK(); 
+        this.checkLinkedInCallback(); 
   }
+
+  initLinkedInSDK() {
+  console.log('LinkedIn auth ready');
+}
 
   // ==================== Facebook SDK ====================
   initFacebookSDK() {
@@ -164,10 +175,80 @@ onFacebookLogin() {
   }
 
   // ==================== LinkedIn Login ====================
-  onLinkedInLogin() {
-    // LinkedIn necesită OAuth pe partea de backend
-    this.errors.general = 'LinkedIn login is not yet implemented.';
+onLinkedInLogin() {
+  const state = this.generateRandomState();
+  sessionStorage.setItem('linkedin_oauth_state', state);
+  
+  // Build LinkedIn OAuth URL
+  const authUrl = 'https://www.linkedin.com/oauth/v2/authorization?' +
+    `response_type=code&` +
+    `client_id=${this.linkedInConfig.clientId}&` +
+    `redirect_uri=${encodeURIComponent(this.linkedInConfig.redirectUri)}&` +
+    `state=${state}&` +
+    `scope=openid%20profile%20email`;
+  
+  // Open in same window (like Facebook does)
+  window.location.href = authUrl;
+}
+
+private generateRandomState(): string {
+  const array = new Uint32Array(2);
+  window.crypto.getRandomValues(array);
+  return Array.from(array, dec => ('0' + dec.toString(16)).substr(-2)).join('');
+}
+
+private checkLinkedInCallback() {
+  // Check if we're coming back from LinkedIn
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('code');
+  const state = urlParams.get('state');
+  const error = urlParams.get('error');
+  
+  if (error) {
+    this.errors.general = 'LinkedIn authentication was cancelled or failed.';
+    // Clean URL
+    window.history.replaceState({}, document.title, '/login');
+    return;
   }
+  
+  if (code && state) {
+    const savedState = sessionStorage.getItem('linkedin_oauth_state');
+    
+    if (state !== savedState) {
+      this.errors.general = 'Invalid state parameter. Please try again.';
+      window.history.replaceState({}, document.title, '/login');
+      return;
+    }
+    
+    // Clear state
+    sessionStorage.removeItem('linkedin_oauth_state');
+    
+    // Show loading
+    this.isLoading = true;
+    
+    // Send code to backend
+    this.authService.linkedInLogin(code).subscribe({
+      next: (authResponse) => {
+        this.isLoading = false;
+        window.history.replaceState({}, document.title, '/login');
+        this.handleSuccessfulAuth(authResponse);
+      },
+      error: (err) => {
+        this.isLoading = false;
+        console.error('LinkedIn login error:', err);
+        window.history.replaceState({}, document.title, '/login');
+        
+        if (err.error?.error) {
+          this.errors.general = err.error.error;
+        } else if (err.error?.message) {
+          this.errors.general = err.error.message;
+        } else {
+          this.errors.general = 'LinkedIn login failed. Please try again.';
+        }
+      }
+    });
+  }
+}
 
   // ==================== Rest of existing methods ====================
   onLogin() {

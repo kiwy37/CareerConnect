@@ -368,34 +368,6 @@ namespace CareerConnect.Server.Services
             return user;
         }
 
-        private async Task<User> HandleLinkedInLoginAsync(SocialLoginDto dto)
-        {
-            var user = await _userRepository.GetByEmailAsync(dto.Email!);
-
-            if (user == null)
-            {
-                user = new User
-                {
-                    Email = dto.Email!,
-                    LinkedInId = dto.ProviderId,
-                    Nume = dto.LastName ?? "",
-                    Prenume = dto.FirstName ?? "",
-                    RolId = 2,
-                    DataNastere = DateTime.UtcNow.AddYears(-18),
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                user = await _userRepository.CreateAsync(user);
-            }
-            else if (string.IsNullOrEmpty(user.LinkedInId))
-            {
-                user.LinkedInId = dto.ProviderId;
-                await _userRepository.UpdateAsync(user);
-            }
-
-            return user;
-        }
-
         public string GetTwitterOAuthUrl()
         {
             var clientId = _configuration["Authentication:Twitter:ClientId"];
@@ -417,10 +389,195 @@ namespace CareerConnect.Server.Services
             return $"https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id={clientId}&redirect_uri={redirectUri}&scope=r_liteprofile%20r_emailaddress";
         }
 
-        public async Task<AuthResponseDto> HandleLinkedInCallbackAsync(string code)
+        private async Task<User> HandleLinkedInLoginAsync(SocialLoginDto dto)
         {
-            // Implementează logica OAuth pentru LinkedIn
-            throw new NotImplementedException("LinkedIn OAuth callback trebuie implementat complet");
+            try
+            {
+                _logger.LogInformation($"LinkedIn login attempt");
+
+                // If we have all user data from frontend, use it directly
+                if (!string.IsNullOrEmpty(dto.Email) &&
+                    !string.IsNullOrEmpty(dto.FirstName) &&
+                    !string.IsNullOrEmpty(dto.LastName) &&
+                    !string.IsNullOrEmpty(dto.ProviderId))
+                {
+                    _logger.LogInformation($"LinkedIn login with provided data: {dto.Email}");
+
+                    var user = await _userRepository.GetByLinkedInIdAsync(dto.ProviderId);
+
+                    if (user == null)
+                    {
+                        // Check if user exists by email
+                        user = await _userRepository.GetByEmailAsync(dto.Email);
+
+                        if (user != null)
+                        {
+                            // Link LinkedIn to existing account
+                            _logger.LogInformation($"Linking LinkedIn to existing user: {dto.Email}");
+                            user.LinkedInId = dto.ProviderId;
+                            await _userRepository.UpdateAsync(user);
+                        }
+                        else
+                        {
+                            // Create new user
+                            _logger.LogInformation($"Creating new user from LinkedIn: {dto.Email}");
+                            user = new User
+                            {
+                                Email = dto.Email,
+                                LinkedInId = dto.ProviderId,
+                                Nume = dto.LastName ?? "User",
+                                Prenume = dto.FirstName ?? "LinkedIn",
+                                RolId = 2,
+                                DataNastere = DateTime.UtcNow.AddYears(-18),
+                                CreatedAt = DateTime.UtcNow
+                            };
+
+                            user = await _userRepository.CreateAsync(user);
+                            user = await _userRepository.GetByIdAsync(user.Id);
+                        }
+                    }
+
+                    _logger.LogInformation($"LinkedIn login successful for: {user!.Email}");
+                    return user!;
+                }
+
+                // If no data provided, we need to exchange the access token
+                // This requires making API calls to LinkedIn
+                throw new InvalidOperationException("LinkedIn user data is required");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in HandleLinkedInLoginAsync");
+                throw new UnauthorizedAccessException("LinkedIn authentication failed: " + ex.Message);
+            }
+        }
+
+        public async Task<AuthResponseDto> LinkedInLoginAsync(LinkedInLoginDto linkedInLoginDto)
+        {
+            try
+            {
+                var clientId = _configuration["Authentication:LinkedIn:ClientId"];
+                var clientSecret = _configuration["Authentication:LinkedIn:ClientSecret"];
+                var redirectUri = _configuration["Authentication:LinkedIn:RedirectUri"];
+
+                if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
+                {
+                    throw new InvalidOperationException("LinkedIn authentication is not configured");
+                }
+
+                var httpClient = _httpClientFactory.CreateClient();
+
+                // Step 1: Exchange authorization code for access token
+                var tokenRequestData = new Dictionary<string, string>
+        {
+            { "grant_type", "authorization_code" },
+            { "code", linkedInLoginDto.Code },
+            { "client_id", clientId },
+            { "client_secret", clientSecret },
+            { "redirect_uri", redirectUri }
+        };
+
+                var tokenRequest = new HttpRequestMessage(HttpMethod.Post, "https://www.linkedin.com/oauth/v2/accessToken")
+                {
+                    Content = new FormUrlEncodedContent(tokenRequestData)
+                };
+
+                var tokenResponse = await httpClient.SendAsync(tokenRequest);
+
+                if (!tokenResponse.IsSuccessStatusCode)
+                {
+                    var errorContent = await tokenResponse.Content.ReadAsStringAsync();
+                    _logger.LogError($"LinkedIn token error: {errorContent}");
+                    throw new UnauthorizedAccessException("Failed to get access token from LinkedIn");
+                }
+
+                var tokenContent = await tokenResponse.Content.ReadAsStringAsync();
+                var tokenData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(tokenContent);
+
+                if (tokenData == null || !tokenData.ContainsKey("access_token"))
+                {
+                    throw new UnauthorizedAccessException("Invalid token response from LinkedIn");
+                }
+
+                var accessToken = tokenData["access_token"].GetString();
+
+                // Step 2: Get user profile using the access token
+                var profileRequest = new HttpRequestMessage(HttpMethod.Get, "https://api.linkedin.com/v2/userinfo");
+                profileRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+                var profileResponse = await httpClient.SendAsync(profileRequest);
+
+                if (!profileResponse.IsSuccessStatusCode)
+                {
+                    var errorContent = await profileResponse.Content.ReadAsStringAsync();
+                    _logger.LogError($"LinkedIn profile error: {errorContent}");
+                    throw new UnauthorizedAccessException("Failed to get user profile from LinkedIn");
+                }
+
+                var profileContent = await profileResponse.Content.ReadAsStringAsync();
+                _logger.LogInformation($"LinkedIn profile response: {profileContent}");
+
+                var profileData = JsonSerializer.Deserialize<LinkedInUserInfo>(profileContent);
+
+                if (profileData == null)
+                {
+                    throw new UnauthorizedAccessException("Invalid profile data from LinkedIn");
+                }
+
+                // Step 3: Create or find user
+                var email = profileData.Email;
+                if (string.IsNullOrEmpty(email))
+                {
+                    email = $"linkedin_{profileData.Sub}@careerconnect.temp";
+                    _logger.LogInformation($"No email from LinkedIn, using temporary: {email}");
+                }
+
+                var user = await _userRepository.GetByLinkedInIdAsync(profileData.Sub);
+
+                if (user == null)
+                {
+                    user = await _userRepository.GetByEmailAsync(email);
+
+                    if (user != null)
+                    {
+                        // Link LinkedIn to existing account
+                        user.LinkedInId = profileData.Sub;
+                        await _userRepository.UpdateAsync(user);
+                    }
+                    else
+                    {
+                        // Create new user
+                        user = new User
+                        {
+                            Email = email,
+                            LinkedInId = profileData.Sub,
+                            Nume = profileData.FamilyName ?? "User",
+                            Prenume = profileData.GivenName ?? "LinkedIn",
+                            RolId = 2,
+                            DataNastere = DateTime.UtcNow.AddYears(-18),
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        user = await _userRepository.CreateAsync(user);
+                        user = await _userRepository.GetByIdAsync(user.Id);
+                    }
+                }
+
+                var token = _jwtHelper.GenerateToken(user!);
+
+                _logger.LogInformation($"LinkedIn login completed for {email}");
+
+                return new AuthResponseDto
+                {
+                    Token = token,
+                    User = MapToUserDto(user!)
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "LinkedIn login error");
+                throw new UnauthorizedAccessException($"LinkedIn authentication failed: {ex.Message}");
+            }
         }
 
         public async Task ResendVerificationCodeAsync(ResendCodeDto resendCodeDto, string? ipAddress = null)

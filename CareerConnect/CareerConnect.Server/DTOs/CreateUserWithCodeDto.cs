@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace CareerConnect.Server.DTOs
 {
@@ -69,5 +70,32 @@ namespace CareerConnect.Server.DTOs
         [StringLength(6, MinimumLength = 6, ErrorMessage = "Codul trebuie să conțină exact 6 cifre")]
         [RegularExpression("^[0-9]{6}$", ErrorMessage = "Codul trebuie să conțină doar cifre")]
         public string Code { get; set; } = string.Empty;
+    }
+
+    public class LinkedInLoginDto
+    {
+        [Required]
+        public string Code { get; set; } = string.Empty;
+    }
+
+    public class LinkedInUserInfo
+    {
+        [JsonPropertyName("sub")]
+        public string Sub { get; set; } = string.Empty;
+
+        [JsonPropertyName("email")]
+        public string Email { get; set; } = string.Empty;
+
+        [JsonPropertyName("given_name")]
+        public string GivenName { get; set; } = string.Empty;
+
+        [JsonPropertyName("family_name")]
+        public string FamilyName { get; set; } = string.Empty;
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("picture")]
+        public string Picture { get; set; } = string.Empty;
     }
 }
