@@ -31,6 +31,15 @@ export interface RegisterRequest {
   rolId: number;
 }
 
+export interface VerifyCodeDto {
+  email: string;
+  code: string;
+}
+
+export interface CreateUserWithCodeDto extends RegisterRequest {
+  code: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -49,9 +58,15 @@ export class AuthService {
     }
   }
 
-  login(email: string, parola: string): Observable<AuthResponse> {
+  // Metode pentru login flow
+  initiateLogin(email: string, parola: string): Observable<any> {
     const request: LoginRequest = { email, parola };
-    return this.http.post<AuthResponse>(`${this.apiUrl}/login`, request).pipe(
+    return this.http.post(`${this.apiUrl}/login/initiate`, request);
+  }
+
+  completeLogin(email: string, code: string): Observable<AuthResponse> {
+    const request: VerifyCodeDto = { email, code };
+    return this.http.post<AuthResponse>(`${this.apiUrl}/login/complete`, request).pipe(
       tap(response => {
         this.setToken(response.token);
         this.setCurrentUser(response.user);
@@ -59,8 +74,31 @@ export class AuthService {
     );
   }
 
-  register(data: RegisterRequest): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${this.apiUrl}/register`, data).pipe(
+  // Metode pentru register flow
+  initiateRegister(data: RegisterRequest): Observable<any> {
+    return this.http.post(`${this.apiUrl}/register/initiate`, data);
+  }
+
+  finalizeRegister(data: RegisterRequest, code: string): Observable<AuthResponse> {
+    const request: CreateUserWithCodeDto = { ...data, code };
+    return this.http.post<AuthResponse>(`${this.apiUrl}/register/finalize`, request).pipe(
+      tap(response => {
+        this.setToken(response.token);
+        this.setCurrentUser(response.user);
+      })
+    );
+  }
+
+  // Metodă pentru resend code
+  resendVerificationCode(email: string, type: string): Observable<any> {
+    const request = { email, type };
+    return this.http.post(`${this.apiUrl}/resend-code`, request);
+  }
+
+  // Metodă simplă pentru login (dacă vrei să o păstrezi pentru testare)
+  login(email: string, parola: string): Observable<AuthResponse> {
+    const request: LoginRequest = { email, parola };
+    return this.http.post<AuthResponse>(`${this.apiUrl}/login`, request).pipe(
       tap(response => {
         this.setToken(response.token);
         this.setCurrentUser(response.user);
@@ -91,7 +129,6 @@ export class AuthService {
     const token = this.getToken();
     if (!token) return false;
     
-    // Verifică dacă token-ul a expirat
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       return payload.exp * 1000 > Date.now();
