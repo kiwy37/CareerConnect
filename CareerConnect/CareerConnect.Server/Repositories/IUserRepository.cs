@@ -8,6 +8,9 @@ namespace CareerConnect.Server.Repositories
         Task<User?> GetByIdAsync(int id);
         Task<User?> GetByEmailAsync(string email);
         Task<User?> GetByGoogleIdAsync(string googleId);
+        Task<User?> GetByFacebookIdAsync(string facebookId);
+        Task<User?> GetByTwitterIdAsync(string twitterId);
+        Task<User?> GetByLinkedInIdAsync(string linkedInId);
         Task<User> CreateAsync(User user);
         Task<User> UpdateAsync(User user);
         Task<bool> DeleteAsync(int id);

@@ -2,6 +2,42 @@
 
 namespace CareerConnect.Server.DTOs
 {
+    public class SocialLoginDto
+    {
+        [Required]
+        public string Provider { get; set; } = string.Empty; // "Google", "Facebook", "Twitter", "LinkedIn"
+
+        [Required]
+        public string AccessToken { get; set; } = string.Empty;
+
+        public string? Email { get; set; }
+        public string? FirstName { get; set; }
+        public string? LastName { get; set; }
+        public string? ProviderId { get; set; }
+    }
+
+    public class FacebookUserData
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string First_Name { get; set; } = string.Empty;
+        public string Last_Name { get; set; } = string.Empty;
+    }
+
+    public class TwitterUserData
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+    }
+
+    public class LinkedInUserData
+    {
+        public string Id { get; set; } = string.Empty;
+        public string EmailAddress { get; set; } = string.Empty;
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+    }
     public class CreateUserWithCodeDto
     {
         [Required(ErrorMessage = "Email-ul este obligatoriu")]

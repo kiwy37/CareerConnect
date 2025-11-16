@@ -42,5 +42,14 @@ namespace CareerConnect.Server.Models
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
+
+        [MaxLength(255)]
+        public string? FacebookId { get; set; }
+
+        [MaxLength(255)]
+        public string? TwitterId { get; set; }
+
+        [MaxLength(255)]
+        public string? LinkedInId { get; set; }
     }
 }

@@ -40,6 +40,15 @@ export interface CreateUserWithCodeDto extends RegisterRequest {
   code: string;
 }
 
+export interface SocialLoginDto {
+  provider: 'Google' | 'Facebook' | 'Twitter' | 'LinkedIn';
+  accessToken: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  providerId?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -91,14 +100,13 @@ export class AuthService {
 
   // Metodă pentru resend code
   resendVerificationCode(email: string, type: string): Observable<any> {
-    const request = { email, type };
+    const request = { email, verificationType: type };
     return this.http.post(`${this.apiUrl}/resend-code`, request);
   }
 
-  // Metodă simplă pentru login (dacă vrei să o păstrezi pentru testare)
-  login(email: string, parola: string): Observable<AuthResponse> {
-    const request: LoginRequest = { email, parola };
-    return this.http.post<AuthResponse>(`${this.apiUrl}/login`, request).pipe(
+  // Social Login Methods
+  googleLogin(idToken: string): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(`${this.apiUrl}/google-login`, { idToken }).pipe(
       tap(response => {
         this.setToken(response.token);
         this.setCurrentUser(response.user);
@@ -106,8 +114,50 @@ export class AuthService {
     );
   }
 
-  googleLogin(idToken: string): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${this.apiUrl}/google-login`, { idToken }).pipe(
+  facebookLogin(accessToken: string, email: string, firstName: string, lastName: string, facebookId: string): Observable<AuthResponse> {
+    const request: SocialLoginDto = {
+      provider: 'Facebook',
+      accessToken,
+      email,
+      firstName,
+      lastName,
+      providerId: facebookId
+    };
+    return this.http.post<AuthResponse>(`${this.apiUrl}/social-login`, request).pipe(
+      tap(response => {
+        this.setToken(response.token);
+        this.setCurrentUser(response.user);
+      })
+    );
+  }
+
+  twitterLogin(accessToken: string, email: string, firstName: string, lastName: string, twitterId: string): Observable<AuthResponse> {
+    const request: SocialLoginDto = {
+      provider: 'Twitter',
+      accessToken,
+      email,
+      firstName,
+      lastName,
+      providerId: twitterId
+    };
+    return this.http.post<AuthResponse>(`${this.apiUrl}/social-login`, request).pipe(
+      tap(response => {
+        this.setToken(response.token);
+        this.setCurrentUser(response.user);
+      })
+    );
+  }
+
+  linkedInLogin(accessToken: string, email: string, firstName: string, lastName: string, linkedInId: string): Observable<AuthResponse> {
+    const request: SocialLoginDto = {
+      provider: 'LinkedIn',
+      accessToken,
+      email,
+      firstName,
+      lastName,
+      providerId: linkedInId
+    };
+    return this.http.post<AuthResponse>(`${this.apiUrl}/social-login`, request).pipe(
       tap(response => {
         this.setToken(response.token);
         this.setCurrentUser(response.user);

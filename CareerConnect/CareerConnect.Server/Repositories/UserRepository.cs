@@ -42,6 +42,27 @@ namespace CareerConnect.Server.Repositories
                 .FirstOrDefaultAsync(u => u.GoogleId == googleId);
         }
 
+        public async Task<User?> GetByFacebookIdAsync(string facebookId)
+        {
+            return await _context.Users
+                .Include(u => u.Rol)
+                .FirstOrDefaultAsync(u => u.FacebookId == facebookId);
+        }
+
+        public async Task<User?> GetByTwitterIdAsync(string twitterId)
+        {
+            return await _context.Users
+                .Include(u => u.Rol)
+                .FirstOrDefaultAsync(u => u.TwitterId == twitterId);
+        }
+
+        public async Task<User?> GetByLinkedInIdAsync(string linkedInId)
+        {
+            return await _context.Users
+                .Include(u => u.Rol)
+                .FirstOrDefaultAsync(u => u.LinkedInId == linkedInId);
+        }
+
         public async Task<User> CreateAsync(User user)
         {
             _context.Users.Add(user);

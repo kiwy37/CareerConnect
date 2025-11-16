@@ -3,7 +3,8 @@ using CareerConnect.Server.Helpers;
 using CareerConnect.Server.Models;
 using CareerConnect.Server.Repositories;
 using Google.Apis.Auth;
-using Microsoft.EntityFrameworkCore;
+using System.Net.Http;
+using System.Text.Json;
 
 namespace CareerConnect.Server.Services
 {
@@ -14,19 +15,22 @@ namespace CareerConnect.Server.Services
         private readonly JwtHelper _jwtHelper;
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthService> _logger;
+        private readonly IHttpClientFactory _httpClientFactory;
 
         public AuthService(
             IUserRepository userRepository,
             IVerificationService verificationService,
             JwtHelper jwtHelper,
             IConfiguration configuration,
-            ILogger<AuthService> logger)
+            ILogger<AuthService> logger,
+            IHttpClientFactory httpClientFactory)
         {
             _userRepository = userRepository;
             _verificationService = verificationService;
             _jwtHelper = jwtHelper;
             _configuration = configuration;
             _logger = logger;
+            _httpClientFactory = httpClientFactory;
         }
 
         public async Task<PendingVerificationDto> InitiateLoginAsync(LoginDto loginDto, string? ipAddress = null)
@@ -37,12 +41,11 @@ namespace CareerConnect.Server.Services
                 throw new UnauthorizedAccessException("Email sau parolă incorectă");
 
             if (user.Parola == null)
-                throw new UnauthorizedAccessException("Acest cont este asociat cu Google. Vă rugăm autentificați-vă cu Google.");
+                throw new UnauthorizedAccessException("Acest cont este asociat cu un provider social. Vă rugăm autentificați-vă prin acel provider.");
 
             if (!BCrypt.Net.BCrypt.Verify(loginDto.Parola, user.Parola))
                 throw new UnauthorizedAccessException("Email sau parolă incorectă");
 
-            // Generăm și trimitem codul de verificare
             await _verificationService.GenerateAndSendCodeAsync(loginDto.Email, "Login", ipAddress);
 
             _logger.LogInformation($"Login initiated for {loginDto.Email}");
@@ -57,7 +60,6 @@ namespace CareerConnect.Server.Services
 
         public async Task<AuthResponseDto> CompleteLoginAsync(VerifyCodeDto verifyCodeDto)
         {
-            // Validăm codul
             var isValid = await _verificationService.ValidateCodeAsync(
                 verifyCodeDto.Email,
                 verifyCodeDto.Code,
@@ -66,7 +68,6 @@ namespace CareerConnect.Server.Services
             if (!isValid)
                 throw new UnauthorizedAccessException("Cod de verificare invalid");
 
-            // Obținem userul și generăm token
             var user = await _userRepository.GetByEmailAsync(verifyCodeDto.Email);
 
             if (user == null)
@@ -88,7 +89,6 @@ namespace CareerConnect.Server.Services
             if (await _userRepository.EmailExistsAsync(createUserDto.Email))
                 throw new InvalidOperationException("Email-ul este deja înregistrat");
 
-            // Generăm și trimitem codul de verificare
             await _verificationService.GenerateAndSendCodeAsync(createUserDto.Email, "Register", ipAddress);
 
             _logger.LogInformation($"Registration initiated for {createUserDto.Email}");
@@ -101,33 +101,8 @@ namespace CareerConnect.Server.Services
             };
         }
 
-        public async Task<AuthResponseDto> CompleteRegisterAsync(VerifyCodeDto verifyCodeDto)
-        {
-            // Validăm codul
-            var isValid = await _verificationService.ValidateCodeAsync(
-                verifyCodeDto.Email,
-                verifyCodeDto.Code,
-                "Register");
-
-            if (!isValid)
-                throw new UnauthorizedAccessException("Cod de verificare invalid");
-
-            // IMPORTANT: Trebuie să stocăm temporar datele de înregistrare
-            // În acest caz, vom cere frontend-ul să trimită din nou datele complete
-            // sau să le stocăm într-un cache/sesiune temporară
-
-            // Pentru moment, vom returna un răspuns care indică succesul verificării
-            // Frontend-ul va trebui să apeleze un endpoint final cu toate datele
-
-            throw new NotImplementedException(
-                "Pentru a finaliza înregistrarea, frontend-ul trebuie să trimită datele complete după verificarea codului. " +
-                "Consideră crearea unui endpoint separat pentru finalizarea înregistrării.");
-        }
-
-        // Metodă pentru finalizarea înregistrării cu verificarea codului
         public async Task<AuthResponseDto> FinalizeRegisterWithVerificationAsync(CreateUserWithCodeDto createUserDto)
         {
-            // Validăm codul
             var isValid = await _verificationService.ValidateCodeAsync(
                 createUserDto.Email,
                 createUserDto.Code,
@@ -136,7 +111,6 @@ namespace CareerConnect.Server.Services
             if (!isValid)
                 throw new UnauthorizedAccessException("Cod de verificare invalid");
 
-            // Verificăm dacă email-ul există deja
             if (await _userRepository.EmailExistsAsync(createUserDto.Email))
                 throw new InvalidOperationException("Email-ul este deja înregistrat");
 
@@ -202,7 +176,7 @@ namespace CareerConnect.Server.Services
                         GoogleId = payload.Subject,
                         Nume = payload.FamilyName ?? "",
                         Prenume = payload.GivenName ?? "",
-                        RolId = 2, // default: angajat
+                        RolId = 2,
                         DataNastere = DateTime.UtcNow.AddYears(-18),
                         CreatedAt = DateTime.UtcNow
                     };
@@ -214,7 +188,6 @@ namespace CareerConnect.Server.Services
 
             var token = _jwtHelper.GenerateToken(user!);
 
-            // Google login nu necesită verificare prin email suplimentară
             _logger.LogInformation($"Google login completed for {payload.Email}");
 
             return new AuthResponseDto
@@ -222,6 +195,157 @@ namespace CareerConnect.Server.Services
                 Token = token,
                 User = MapToUserDto(user!)
             };
+        }
+
+        public async Task<AuthResponseDto> SocialLoginAsync(SocialLoginDto socialLoginDto)
+        {
+            User? user = null;
+
+            switch (socialLoginDto.Provider)
+            {
+                case "Facebook":
+                    user = await HandleFacebookLoginAsync(socialLoginDto);
+                    break;
+                case "Twitter":
+                    user = await HandleTwitterLoginAsync(socialLoginDto);
+                    break;
+                case "LinkedIn":
+                    user = await HandleLinkedInLoginAsync(socialLoginDto);
+                    break;
+                default:
+                    throw new InvalidOperationException("Provider necunoscut");
+            }
+
+            var token = _jwtHelper.GenerateToken(user);
+
+            _logger.LogInformation($"{socialLoginDto.Provider} login completed for {user.Email}");
+
+            return new AuthResponseDto
+            {
+                Token = token,
+                User = MapToUserDto(user)
+            };
+        }
+
+        private async Task<User> HandleFacebookLoginAsync(SocialLoginDto dto)
+        {
+            // Verificăm token-ul Facebook
+            var httpClient = _httpClientFactory.CreateClient();
+            var response = await httpClient.GetAsync($"https://graph.facebook.com/me?access_token={dto.AccessToken}&fields=id,email,first_name,last_name");
+
+            if (!response.IsSuccessStatusCode)
+                throw new UnauthorizedAccessException("Token Facebook invalid");
+
+            var userData = await JsonSerializer.DeserializeAsync<FacebookUserData>(await response.Content.ReadAsStreamAsync());
+
+            var user = await _userRepository.GetByEmailAsync(userData!.Email);
+
+            if (user == null)
+            {
+                user = new User
+                {
+                    Email = userData.Email,
+                    FacebookId = userData.Id,
+                    Nume = userData.Last_Name,
+                    Prenume = userData.First_Name,
+                    RolId = 2,
+                    DataNastere = DateTime.UtcNow.AddYears(-18),
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                user = await _userRepository.CreateAsync(user);
+            }
+            else if (string.IsNullOrEmpty(user.FacebookId))
+            {
+                user.FacebookId = userData.Id;
+                await _userRepository.UpdateAsync(user);
+            }
+
+            return user;
+        }
+
+        private async Task<User> HandleTwitterLoginAsync(SocialLoginDto dto)
+        {
+            // Similar cu Facebook, dar cu Twitter API
+            var user = await _userRepository.GetByEmailAsync(dto.Email!);
+
+            if (user == null)
+            {
+                user = new User
+                {
+                    Email = dto.Email!,
+                    TwitterId = dto.ProviderId,
+                    Nume = dto.LastName ?? "",
+                    Prenume = dto.FirstName ?? "",
+                    RolId = 2,
+                    DataNastere = DateTime.UtcNow.AddYears(-18),
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                user = await _userRepository.CreateAsync(user);
+            }
+            else if (string.IsNullOrEmpty(user.TwitterId))
+            {
+                user.TwitterId = dto.ProviderId;
+                await _userRepository.UpdateAsync(user);
+            }
+
+            return user;
+        }
+
+        private async Task<User> HandleLinkedInLoginAsync(SocialLoginDto dto)
+        {
+            var user = await _userRepository.GetByEmailAsync(dto.Email!);
+
+            if (user == null)
+            {
+                user = new User
+                {
+                    Email = dto.Email!,
+                    LinkedInId = dto.ProviderId,
+                    Nume = dto.LastName ?? "",
+                    Prenume = dto.FirstName ?? "",
+                    RolId = 2,
+                    DataNastere = DateTime.UtcNow.AddYears(-18),
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                user = await _userRepository.CreateAsync(user);
+            }
+            else if (string.IsNullOrEmpty(user.LinkedInId))
+            {
+                user.LinkedInId = dto.ProviderId;
+                await _userRepository.UpdateAsync(user);
+            }
+
+            return user;
+        }
+
+        public string GetTwitterOAuthUrl()
+        {
+            var clientId = _configuration["Authentication:Twitter:ClientId"];
+            var redirectUri = _configuration["Authentication:Twitter:RedirectUri"];
+            return $"https://twitter.com/i/oauth2/authorize?response_type=code&client_id={clientId}&redirect_uri={redirectUri}&scope=tweet.read%20users.read&state=state";
+        }
+
+        public async Task<AuthResponseDto> HandleTwitterCallbackAsync(string oauthToken, string oauthVerifier)
+        {
+            // Implementează logica OAuth pentru Twitter
+            // Acesta este un exemplu simplificat
+            throw new NotImplementedException("Twitter OAuth callback trebuie implementat complet");
+        }
+
+        public string GetLinkedInOAuthUrl()
+        {
+            var clientId = _configuration["Authentication:LinkedIn:ClientId"];
+            var redirectUri = _configuration["Authentication:LinkedIn:RedirectUri"];
+            return $"https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id={clientId}&redirect_uri={redirectUri}&scope=r_liteprofile%20r_emailaddress";
+        }
+
+        public async Task<AuthResponseDto> HandleLinkedInCallbackAsync(string code)
+        {
+            // Implementează logica OAuth pentru LinkedIn
+            throw new NotImplementedException("LinkedIn OAuth callback trebuie implementat complet");
         }
 
         public async Task ResendVerificationCodeAsync(ResendCodeDto resendCodeDto, string? ipAddress = null)
