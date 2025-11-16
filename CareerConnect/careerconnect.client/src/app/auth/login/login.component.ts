@@ -1,6 +1,9 @@
-import { Component, ViewEncapsulation } from '@angular/core';
+import { Component, ViewEncapsulation, OnInit } from '@angular/core';
 import { AuthService, RegisterRequest } from '../auth.service';
 import { Router } from '@angular/router';
+
+declare const FB: any;
+declare const google: any;
 
 @Component({
   selector: 'app-login',
@@ -8,7 +11,7 @@ import { Router } from '@angular/router';
   styleUrls: ['./login.component.css'],
   encapsulation: ViewEncapsulation.None,
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
   showLogin = true;
   showVerification = false;
   isLoading = false;
@@ -33,11 +36,123 @@ export class LoginComponent {
 
   constructor(private authService: AuthService, private router: Router) {}
 
+  ngOnInit() {
+    // Inițializează SDK-urile pentru social login
+    this.initFacebookSDK();
+    this.initGoogleSDK();
+  }
+
+  // ==================== Facebook SDK ====================
+  initFacebookSDK() {
+    // Verifică dacă SDK-ul FB este deja încărcat
+    if (typeof FB !== 'undefined') {
+      this.configureFacebookSDK();
+      return;
+    }
+
+    // Încarcă SDK-ul Facebook
+    const script = document.createElement('script');
+    script.src = 'https://connect.facebook.net/en_US/sdk.js';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => this.configureFacebookSDK();
+    document.body.appendChild(script);
+  }
+
+  configureFacebookSDK() {
+    FB.init({
+      appId: '25212061275130005', // ID-ul tău din appsettings.json
+      cookie: true,
+      xfbml: true,
+      version: 'v18.0'
+    });
+  }
+
+onFacebookLogin() {
+    FB.login((response: any) => {
+      if (response.authResponse) {
+        this.isLoading = true;
+        
+        // Obține informațiile utilizatorului
+        FB.api('/me', { fields: 'id,email,first_name,last_name' }, (userInfo: any) => {
+          this.authService.facebookLogin(
+            response.authResponse.accessToken,
+            userInfo.email,
+            userInfo.first_name,
+            userInfo.last_name,
+            userInfo.id
+          ).subscribe({
+            next: (authResponse) => {
+              this.isLoading = false;
+              this.handleSuccessfulAuth(authResponse);
+            },
+            error: (err) => {
+              this.isLoading = false;
+              console.error('Eroare Facebook login:', err);
+              this.errors.general = 'Facebook login failed. Please try again.';
+            }
+          });
+        });
+      } else {
+        console.log('User cancelled login or did not fully authorize.');
+      }
+    }, { scope: 'public_profile' }); 
+  }
+
+  // ==================== Google SDK ====================
+  initGoogleSDK() {
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => this.configureGoogleSDK();
+    document.body.appendChild(script);
+  }
+
+  configureGoogleSDK() {
+    google.accounts.id.initialize({
+      client_id: '937265656787-unp24ld8lqsjbu8jh3rvmjct1i0d66ei.apps.googleusercontent.com',
+      callback: (response: any) => this.handleGoogleCallback(response)
+    });
+  }
+
+  onGoogleLogin() {
+    google.accounts.id.prompt();
+  }
+
+  handleGoogleCallback(response: any) {
+    this.isLoading = true;
+    
+    this.authService.googleLogin(response.credential).subscribe({
+      next: (authResponse) => {
+        this.isLoading = false;
+        this.handleSuccessfulAuth(authResponse);
+      },
+      error: (err) => {
+        this.isLoading = false;
+        console.error('Eroare Google login:', err);
+        this.errors.general = 'Google login failed. Please try again.';
+      }
+    });
+  }
+
+  // ==================== Twitter Login ====================
+  onTwitterLogin() {
+    // Twitter necesită OAuth pe partea de backend
+    this.errors.general = 'Twitter login is not yet implemented.';
+  }
+
+  // ==================== LinkedIn Login ====================
+  onLinkedInLogin() {
+    // LinkedIn necesită OAuth pe partea de backend
+    this.errors.general = 'LinkedIn login is not yet implemented.';
+  }
+
+  // ==================== Rest of existing methods ====================
   onLogin() {
     this.errors = {};
     this.successMessage = '';
 
-    // Validare
     if (!this.validateEmail(this.loginData.email)) {
       this.errors.loginEmail = 'Please enter a valid email address.';
       return;
@@ -115,7 +230,6 @@ export class LoginComponent {
       this.errors.registerBirthdate = 'Birth date is required.';
       isValid = false;
     } else {
-      // Verifică dacă utilizatorul are cel puțin 18 ani
       const birthDate = new Date(this.registerData.birthdate);
       const today = new Date();
       const age = today.getFullYear() - birthDate.getFullYear();
@@ -144,7 +258,7 @@ export class LoginComponent {
       prenume: this.registerData.firstname,
       telefon: this.registerData.phone || undefined,
       dataNastere: this.registerData.birthdate,
-      rolId: 2, // Default: angajat
+      rolId: 2,
     };
 
     this.authService.initiateRegister(registerRequest).subscribe({
@@ -159,8 +273,6 @@ export class LoginComponent {
       error: (err) => {
         this.isLoading = false;
         console.error('Eroare initiere înregistrare:', err);
-        console.error('Status:', err.status);
-        console.error('Error body:', err.error);
 
         if (err.status === 0) {
           this.errors.general = 'Cannot connect to server. Please check if backend is running.';
@@ -281,7 +393,6 @@ export class LoginComponent {
   onCodeInput(index: number, event: any) {
     const value = event.target.value;
     
-    // Permite doar cifre
     if (!/^\d*$/.test(value)) {
       event.target.value = '';
       this.codeDigits[index] = '';
@@ -312,7 +423,6 @@ export class LoginComponent {
       const digits = pasteData.split('');
       this.codeDigits = [...digits];
       
-      // Focus pe ultimul input
       setTimeout(() => {
         const inputs = document.querySelectorAll('.code-input');
         (inputs[5] as HTMLElement).focus();

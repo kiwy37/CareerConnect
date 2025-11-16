@@ -78,10 +78,18 @@
       <div class="social-login">
         <p>or login with social platforms</p>
         <div class="social-icons">
-          <div class="social-icon facebook"><i class="fab fa-facebook-f"></i></div>
-          <div class="social-icon twitter"><i class="fab fa-twitter"></i></div>
-          <div class="social-icon google"><i class="fab fa-google"></i></div>
-          <div class="social-icon linkedin"><i class="fab fa-linkedin-in"></i></div>
+          <div class="social-icon facebook" (click)="onFacebookLogin()" title="Login with Facebook">
+            <i class="fab fa-facebook-f"></i>
+          </div>
+          <div class="social-icon twitter" (click)="onTwitterLogin()" title="Login with Twitter">
+            <i class="fab fa-twitter"></i>
+          </div>
+          <div class="social-icon google" (click)="onGoogleLogin()" title="Login with Google">
+            <i class="fab fa-google"></i>
+          </div>
+          <div class="social-icon linkedin" (click)="onLinkedInLogin()" title="Login with LinkedIn">
+            <i class="fab fa-linkedin-in"></i>
+          </div>
         </div>
       </div>
       
@@ -102,7 +110,13 @@
         <input type="text" class="code-input" maxlength="1" [(ngModel)]="codeDigits[4]" (input)="onCodeInput(4, $event)" (keydown)="onCodeKeydown(4, $event)">
         <input type="text" class="code-input" maxlength="1" [(ngModel)]="codeDigits[5]" (input)="onCodeInput(5, $event)" (keydown)="onCodeKeydown(5, $event)">
       </div>
-      <button (click)="verifyCode()">Verify Code</button>
+      <div class="error-message" [style.display]="errors.verification ? 'block' : 'none'" style="text-align: center;">
+        {{errors.verification}}
+      </div>
+      <button (click)="verifyCode()" [disabled]="isVerifying">
+        <span *ngIf="!isVerifying">Verify Code</span>
+        <span *ngIf="isVerifying">Verifying...</span>
+      </button>
       <div class="resend-code" (click)="resendCode()">Resend Code</div>
       <button class="back-button" (click)="backToLogin()">Back to Login</button>
     </div>
