@@ -49,6 +49,10 @@ export interface SocialLoginDto {
   providerId?: string;
 }
 
+export interface LinkedInLoginDto {
+  code: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -148,17 +152,13 @@ export class AuthService {
     );
   }
 
-  linkedInLogin(accessToken: string, email: string, firstName: string, lastName: string, linkedInId: string): Observable<AuthResponse> {
-    const request: SocialLoginDto = {
-      provider: 'LinkedIn',
-      accessToken,
-      email,
-      firstName,
-      lastName,
-      providerId: linkedInId
-    };
-    return this.http.post<AuthResponse>(`${this.apiUrl}/social-login`, request).pipe(
+  // Fixed LinkedIn login - accepts authorization code
+  linkedInLogin(code: string): Observable<AuthResponse> {
+    const request: LinkedInLoginDto = { code };
+    console.log('Sending LinkedIn code to backend:', code);
+    return this.http.post<AuthResponse>(`${this.apiUrl}/linkedin-login`, request).pipe(
       tap(response => {
+        console.log('LinkedIn login successful:', response);
         this.setToken(response.token);
         this.setCurrentUser(response.user);
       })

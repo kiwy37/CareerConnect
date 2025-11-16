@@ -13,9 +13,9 @@ declare const google: any;
 })
 export class LoginComponent implements OnInit {
   private linkedInConfig = {
-  clientId: '86ov51fct1q6am', // Your LinkedIn Client ID from appsettings.json
-  redirectUri: 'https://localhost:52623'
-};
+    clientId: '77qbiu7uucxtzn',
+    redirectUri: 'https://localhost:52623', // Must match LinkedIn settings exactly
+  };
 
   showLogin = true;
   showVerification = false;
@@ -45,13 +45,13 @@ export class LoginComponent implements OnInit {
     // Inițializează SDK-urile pentru social login
     this.initFacebookSDK();
     this.initGoogleSDK();
-      this.initLinkedInSDK(); 
-        this.checkLinkedInCallback(); 
+    this.initLinkedInSDK();
+    this.checkLinkedInCallback();
   }
 
   initLinkedInSDK() {
-  console.log('LinkedIn auth ready');
-}
+    console.log('LinkedIn auth ready');
+  }
 
   // ==================== Facebook SDK ====================
   initFacebookSDK() {
@@ -75,61 +75,72 @@ export class LoginComponent implements OnInit {
       appId: '25212061275130005', // ID-ul tău din appsettings.json
       cookie: true,
       xfbml: true,
-      version: 'v18.0'
+      version: 'v18.0',
     });
   }
 
-onFacebookLogin() {
-  FB.login((response: any) => {
-    if (response.authResponse) {
-      console.log('Facebook auth response:', response.authResponse);
-      this.isLoading = true;
-      
-      // Obține informațiile utilizatorului
-      FB.api('/me', { fields: 'id,email,first_name,last_name' }, (userInfo: any) => {
-        console.log('Facebook user info:', userInfo);
-        
-        // Check if email is available
-        if (!userInfo.email) {
-          this.isLoading = false;
-          this.errors.general = 'Email is required from Facebook. Please grant email permission.';
-          return;
-        }
-        
-        this.authService.facebookLogin(
-          response.authResponse.accessToken,
-          userInfo.email,
-          userInfo.first_name,
-          userInfo.last_name,
-          userInfo.id
-        ).subscribe({
-          next: (authResponse) => {
-            this.isLoading = false;
-            console.log('Facebook login successful:', authResponse);
-            this.handleSuccessfulAuth(authResponse);
-          },
-          error: (err) => {
-            this.isLoading = false;
-            console.error('Eroare Facebook login:', err);
-            
-            // Better error handling
-            if (err.error?.error) {
-              this.errors.general = err.error.error;
-            } else if (err.error?.message) {
-              this.errors.general = err.error.message;
-            } else {
-              this.errors.general = 'Facebook login failed. Please try again.';
+  onFacebookLogin() {
+    FB.login(
+      (response: any) => {
+        if (response.authResponse) {
+          console.log('Facebook auth response:', response.authResponse);
+          this.isLoading = true;
+
+          // Obține informațiile utilizatorului
+          FB.api(
+            '/me',
+            { fields: 'id,email,first_name,last_name' },
+            (userInfo: any) => {
+              console.log('Facebook user info:', userInfo);
+
+              // Check if email is available
+              if (!userInfo.email) {
+                this.isLoading = false;
+                this.errors.general =
+                  'Email is required from Facebook. Please grant email permission.';
+                return;
+              }
+
+              this.authService
+                .facebookLogin(
+                  response.authResponse.accessToken,
+                  userInfo.email,
+                  userInfo.first_name,
+                  userInfo.last_name,
+                  userInfo.id
+                )
+                .subscribe({
+                  next: (authResponse) => {
+                    this.isLoading = false;
+                    console.log('Facebook login successful:', authResponse);
+                    this.handleSuccessfulAuth(authResponse);
+                  },
+                  error: (err) => {
+                    this.isLoading = false;
+                    console.error('Eroare Facebook login:', err);
+
+                    // Better error handling
+                    if (err.error?.error) {
+                      this.errors.general = err.error.error;
+                    } else if (err.error?.message) {
+                      this.errors.general = err.error.message;
+                    } else {
+                      this.errors.general =
+                        'Facebook login failed. Please try again.';
+                    }
+                  },
+                });
             }
-          }
-        });
-      });
-    } else {
-      console.log('User cancelled login or did not fully authorize.');
-    }
-  }, { 
-    scope: 'public_profile'  // Only request public_profile for now
-  }); 
-}
+          );
+        } else {
+          console.log('User cancelled login or did not fully authorize.');
+        }
+      },
+      {
+        scope: 'public_profile', // Only request public_profile for now
+      }
+    );
+  }
 
   // ==================== Google SDK ====================
   initGoogleSDK() {
@@ -143,8 +154,9 @@ onFacebookLogin() {
 
   configureGoogleSDK() {
     google.accounts.id.initialize({
-      client_id: '937265656787-unp24ld8lqsjbu8jh3rvmjct1i0d66ei.apps.googleusercontent.com',
-      callback: (response: any) => this.handleGoogleCallback(response)
+      client_id:
+        '937265656787-unp24ld8lqsjbu8jh3rvmjct1i0d66ei.apps.googleusercontent.com',
+      callback: (response: any) => this.handleGoogleCallback(response),
     });
   }
 
@@ -154,7 +166,7 @@ onFacebookLogin() {
 
   handleGoogleCallback(response: any) {
     this.isLoading = true;
-    
+
     this.authService.googleLogin(response.credential).subscribe({
       next: (authResponse) => {
         this.isLoading = false;
@@ -164,7 +176,7 @@ onFacebookLogin() {
         this.isLoading = false;
         console.error('Eroare Google login:', err);
         this.errors.general = 'Google login failed. Please try again.';
-      }
+      },
     });
   }
 
@@ -175,80 +187,83 @@ onFacebookLogin() {
   }
 
   // ==================== LinkedIn Login ====================
-onLinkedInLogin() {
-  const state = this.generateRandomState();
-  sessionStorage.setItem('linkedin_oauth_state', state);
-  
-  // Build LinkedIn OAuth URL
-  const authUrl = 'https://www.linkedin.com/oauth/v2/authorization?' +
-    `response_type=code&` +
-    `client_id=${this.linkedInConfig.clientId}&` +
-    `redirect_uri=${encodeURIComponent(this.linkedInConfig.redirectUri)}&` +
-    `state=${state}&` +
-    `scope=openid%20profile%20email`;
-  
-  // Open in same window (like Facebook does)
-  window.location.href = authUrl;
-}
+  onLinkedInLogin() {
+    const state = this.generateRandomState();
+    sessionStorage.setItem('linkedin_oauth_state', state);
 
-private generateRandomState(): string {
-  const array = new Uint32Array(2);
-  window.crypto.getRandomValues(array);
-  return Array.from(array, dec => ('0' + dec.toString(16)).substr(-2)).join('');
-}
+    // Build LinkedIn OAuth URL
+    const authUrl =
+      'https://www.linkedin.com/oauth/v2/authorization?' +
+      `response_type=code&` +
+      `client_id=${this.linkedInConfig.clientId}&` +
+      `redirect_uri=${encodeURIComponent(this.linkedInConfig.redirectUri)}&` +
+      `state=${state}&` +
+      `scope=openid%20profile%20email`;
 
-private checkLinkedInCallback() {
-  // Check if we're coming back from LinkedIn
-  const urlParams = new URLSearchParams(window.location.search);
-  const code = urlParams.get('code');
-  const state = urlParams.get('state');
-  const error = urlParams.get('error');
-  
-  if (error) {
-    this.errors.general = 'LinkedIn authentication was cancelled or failed.';
-    // Clean URL
-    window.history.replaceState({}, document.title, '/login');
-    return;
+    // Open in same window (like Facebook does)
+    window.location.href = authUrl;
   }
-  
-  if (code && state) {
-    const savedState = sessionStorage.getItem('linkedin_oauth_state');
-    
-    if (state !== savedState) {
-      this.errors.general = 'Invalid state parameter. Please try again.';
+
+  private generateRandomState(): string {
+    const array = new Uint32Array(2);
+    window.crypto.getRandomValues(array);
+    return Array.from(array, (dec) => ('0' + dec.toString(16)).substr(-2)).join(
+      ''
+    );
+  }
+
+  private checkLinkedInCallback() {
+    // Check if we're coming back from LinkedIn
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    const error = urlParams.get('error');
+
+    if (error) {
+      this.errors.general = 'LinkedIn authentication was cancelled or failed.';
+      // Clean URL
       window.history.replaceState({}, document.title, '/login');
       return;
     }
-    
-    // Clear state
-    sessionStorage.removeItem('linkedin_oauth_state');
-    
-    // Show loading
-    this.isLoading = true;
-    
-    // Send code to backend
-    this.authService.linkedInLogin(code).subscribe({
-      next: (authResponse) => {
-        this.isLoading = false;
+
+    if (code && state) {
+      const savedState = sessionStorage.getItem('linkedin_oauth_state');
+
+      if (state !== savedState) {
+        this.errors.general = 'Invalid state parameter. Please try again.';
         window.history.replaceState({}, document.title, '/login');
-        this.handleSuccessfulAuth(authResponse);
-      },
-      error: (err) => {
-        this.isLoading = false;
-        console.error('LinkedIn login error:', err);
-        window.history.replaceState({}, document.title, '/login');
-        
-        if (err.error?.error) {
-          this.errors.general = err.error.error;
-        } else if (err.error?.message) {
-          this.errors.general = err.error.message;
-        } else {
-          this.errors.general = 'LinkedIn login failed. Please try again.';
-        }
+        return;
       }
-    });
+
+      // Clear state
+      sessionStorage.removeItem('linkedin_oauth_state');
+
+      // Show loading
+      this.isLoading = true;
+
+      // Send code to backend
+      this.authService.linkedInLogin(code).subscribe({
+        next: (authResponse) => {
+          this.isLoading = false;
+          window.history.replaceState({}, document.title, '/login');
+          this.handleSuccessfulAuth(authResponse);
+        },
+        error: (err) => {
+          this.isLoading = false;
+          console.error('LinkedIn login error:', err);
+          window.history.replaceState({}, document.title, '/login');
+
+          if (err.error?.error) {
+            this.errors.general = err.error.error;
+          } else if (err.error?.message) {
+            this.errors.general = err.error.message;
+          } else {
+            this.errors.general = 'LinkedIn login failed. Please try again.';
+          }
+        },
+      });
+    }
   }
-}
 
   // ==================== Rest of existing methods ====================
   onLogin() {
@@ -261,7 +276,8 @@ private checkLinkedInCallback() {
     }
 
     if (this.loginData.password.length < 6) {
-      this.errors.loginPassword = 'Password must be at least 6 characters long.';
+      this.errors.loginPassword =
+        'Password must be at least 6 characters long.';
       return;
     }
 
@@ -281,14 +297,17 @@ private checkLinkedInCallback() {
         error: (err) => {
           this.isLoading = false;
           console.error('Eroare initiere login:', err);
-          
+
           if (err.status === 0) {
-            this.errors.loginPassword = 'Cannot connect to server. Please check if backend is running.';
+            this.errors.loginPassword =
+              'Cannot connect to server. Please check if backend is running.';
           } else if (err.error?.message) {
             this.errors.loginPassword = err.error.message;
           } else if (err.error?.errors) {
             Object.keys(err.error.errors).forEach((key) => {
-              const errorKey = `login${key.charAt(0).toUpperCase() + key.slice(1)}`;
+              const errorKey = `login${
+                key.charAt(0).toUpperCase() + key.slice(1)
+              }`;
               this.errors[errorKey] = err.error.errors[key][0];
             });
           } else {
@@ -309,7 +328,8 @@ private checkLinkedInCallback() {
     }
 
     if (this.registerData.password.length < 6) {
-      this.errors.registerPassword = 'Password must be at least 6 characters long.';
+      this.errors.registerPassword =
+        'Password must be at least 6 characters long.';
       isValid = false;
     }
 
@@ -377,12 +397,15 @@ private checkLinkedInCallback() {
         console.error('Eroare initiere înregistrare:', err);
 
         if (err.status === 0) {
-          this.errors.general = 'Cannot connect to server. Please check if backend is running.';
+          this.errors.general =
+            'Cannot connect to server. Please check if backend is running.';
         } else if (err.error?.message) {
           this.errors.general = err.error.message;
         } else if (err.error?.errors) {
           Object.keys(err.error.errors).forEach((key) => {
-            const errorKey = `register${key.charAt(0).toUpperCase() + key.slice(1)}`;
+            const errorKey = `register${
+              key.charAt(0).toUpperCase() + key.slice(1)
+            }`;
             this.errors[errorKey] = err.error.errors[key][0];
           });
         } else if (err.error?.title) {
@@ -396,7 +419,7 @@ private checkLinkedInCallback() {
 
   verifyCode() {
     const code = this.codeDigits.join('');
-    
+
     if (code.length !== 6) {
       this.errors.verification = 'Please enter the complete 6-digit code.';
       return;
@@ -415,7 +438,7 @@ private checkLinkedInCallback() {
           this.isVerifying = false;
           console.error('Eroare verificare cod login:', err);
           this.handleVerificationError(err);
-        }
+        },
       });
     } else {
       const registerRequest: RegisterRequest = {
@@ -437,33 +460,36 @@ private checkLinkedInCallback() {
           this.isVerifying = false;
           console.error('Eroare verificare cod register:', err);
           this.handleVerificationError(err);
-        }
+        },
       });
     }
   }
 
   private handleSuccessfulAuth(response: any) {
     this.successMessage = 'Authentication successful! Redirecting...';
-    
+
     setTimeout(() => {
       const role = response.user.rolNume;
       if (role === 'admin') {
         this.router.navigate(['/admin']);
       } else if (role === 'angajator') {
-        this.router.navigate(['/angajator']);
+        this.router.navigate(['/employer']);
       } else {
-        this.router.navigate(['/angajat']);
+        this.router.navigate(['/employee']);
       }
     }, 1500);
   }
 
   private handleVerificationError(err: any) {
     if (err.status === 0) {
-      this.errors.verification = 'Cannot connect to server. Please check if backend is running.';
+      this.errors.verification =
+        'Cannot connect to server. Please check if backend is running.';
     } else if (err.error?.message) {
       this.errors.verification = err.error.message;
     } else if (err.error?.errors) {
-      this.errors.verification = Object.values(err.error.errors).flat().join(', ');
+      this.errors.verification = Object.values(err.error.errors)
+        .flat()
+        .join(', ');
     } else {
       this.errors.verification = 'Invalid verification code. Please try again.';
     }
@@ -471,16 +497,18 @@ private checkLinkedInCallback() {
 
   resendCode() {
     this.errors.verification = '';
-    
-    this.authService.resendVerificationCode(this.currentEmail, this.verificationType).subscribe({
-      next: () => {
-        this.successMessage = 'Verification code resent successfully!';
-      },
-      error: (err) => {
-        console.error('Eroare retrimitere cod:', err);
-        this.errors.verification = 'Failed to resend code. Please try again.';
-      }
-    });
+
+    this.authService
+      .resendVerificationCode(this.currentEmail, this.verificationType)
+      .subscribe({
+        next: () => {
+          this.successMessage = 'Verification code resent successfully!';
+        },
+        error: (err) => {
+          console.error('Eroare retrimitere cod:', err);
+          this.errors.verification = 'Failed to resend code. Please try again.';
+        },
+      });
   }
 
   backToLogin() {
@@ -494,7 +522,7 @@ private checkLinkedInCallback() {
 
   onCodeInput(index: number, event: any) {
     const value = event.target.value;
-    
+
     if (!/^\d*$/.test(value)) {
       event.target.value = '';
       this.codeDigits[index] = '';
@@ -520,11 +548,11 @@ private checkLinkedInCallback() {
   onCodePaste(event: ClipboardEvent) {
     event.preventDefault();
     const pasteData = event.clipboardData?.getData('text').trim();
-    
+
     if (pasteData && /^\d{6}$/.test(pasteData)) {
       const digits = pasteData.split('');
       this.codeDigits = [...digits];
-      
+
       setTimeout(() => {
         const inputs = document.querySelectorAll('.code-input');
         (inputs[5] as HTMLElement).focus();

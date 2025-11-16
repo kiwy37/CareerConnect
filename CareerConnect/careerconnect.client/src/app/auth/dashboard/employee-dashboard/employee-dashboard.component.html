@@ -1,0 +1,35 @@
+<div class="dashboard-container">
+  <header class="dashboard-header">
+    <h1>Employee Dashboard</h1>
+    <div class="user-info">
+      <span>Welcome, {{currentUser?.prenume}} {{currentUser?.nume}}</span>
+      <button (click)="logout()" class="logout-btn">Logout</button>
+    </div>
+  </header>
+  
+  <main class="dashboard-content">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h3>Applications</h3>
+        <p class="stat-number">7</p>
+      </div>
+      <div class="stat-card">
+        <h3>Saved Jobs</h3>
+        <p class="stat-number">15</p>
+      </div>
+      <div class="stat-card">
+        <h3>Profile Views</h3>
+        <p class="stat-number">32</p>
+      </div>
+      <div class="stat-card">
+        <h3>Interviews</h3>
+        <p class="stat-number">2</p>
+      </div>
+    </div>
+    
+    <div class="dashboard-section">
+      <h2>Recommended Jobs</h2>
+      <p>Browse jobs that match your profile and interests...</p>
+    </div>
+  </main>
+</div>

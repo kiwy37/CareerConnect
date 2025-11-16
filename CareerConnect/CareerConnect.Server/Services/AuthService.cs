@@ -460,8 +460,13 @@ namespace CareerConnect.Server.Services
                 var clientSecret = _configuration["Authentication:LinkedIn:ClientSecret"];
                 var redirectUri = _configuration["Authentication:LinkedIn:RedirectUri"];
 
+                _logger.LogInformation($"LinkedIn login attempt with code: {linkedInLoginDto.Code.Substring(0, 20)}...");
+                _logger.LogInformation($"Client ID: {clientId}");
+                _logger.LogInformation($"Redirect URI: {redirectUri}");
+
                 if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
                 {
+                    _logger.LogError("LinkedIn authentication is not configured properly");
                     throw new InvalidOperationException("LinkedIn authentication is not configured");
                 }
 
@@ -477,6 +482,8 @@ namespace CareerConnect.Server.Services
             { "redirect_uri", redirectUri }
         };
 
+                _logger.LogInformation("Requesting access token from LinkedIn...");
+
                 var tokenRequest = new HttpRequestMessage(HttpMethod.Post, "https://www.linkedin.com/oauth/v2/accessToken")
                 {
                     Content = new FormUrlEncodedContent(tokenRequestData)
@@ -487,40 +494,47 @@ namespace CareerConnect.Server.Services
                 if (!tokenResponse.IsSuccessStatusCode)
                 {
                     var errorContent = await tokenResponse.Content.ReadAsStringAsync();
-                    _logger.LogError($"LinkedIn token error: {errorContent}");
-                    throw new UnauthorizedAccessException("Failed to get access token from LinkedIn");
+                    _logger.LogError($"LinkedIn token error ({tokenResponse.StatusCode}): {errorContent}");
+                    throw new UnauthorizedAccessException($"Failed to get access token from LinkedIn: {errorContent}");
                 }
 
                 var tokenContent = await tokenResponse.Content.ReadAsStringAsync();
+                _logger.LogInformation($"Token response: {tokenContent}");
+
                 var tokenData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(tokenContent);
 
                 if (tokenData == null || !tokenData.ContainsKey("access_token"))
                 {
+                    _logger.LogError("Invalid token response - no access_token found");
                     throw new UnauthorizedAccessException("Invalid token response from LinkedIn");
                 }
 
                 var accessToken = tokenData["access_token"].GetString();
+                _logger.LogInformation($"Access token received: {accessToken?.Substring(0, 20)}...");
 
                 // Step 2: Get user profile using the access token
                 var profileRequest = new HttpRequestMessage(HttpMethod.Get, "https://api.linkedin.com/v2/userinfo");
                 profileRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+                _logger.LogInformation("Requesting user profile from LinkedIn...");
 
                 var profileResponse = await httpClient.SendAsync(profileRequest);
 
                 if (!profileResponse.IsSuccessStatusCode)
                 {
                     var errorContent = await profileResponse.Content.ReadAsStringAsync();
-                    _logger.LogError($"LinkedIn profile error: {errorContent}");
-                    throw new UnauthorizedAccessException("Failed to get user profile from LinkedIn");
+                    _logger.LogError($"LinkedIn profile error ({profileResponse.StatusCode}): {errorContent}");
+                    throw new UnauthorizedAccessException($"Failed to get user profile from LinkedIn: {errorContent}");
                 }
 
                 var profileContent = await profileResponse.Content.ReadAsStringAsync();
-                _logger.LogInformation($"LinkedIn profile response: {profileContent}");
+                _logger.LogInformation($"Profile response: {profileContent}");
 
                 var profileData = JsonSerializer.Deserialize<LinkedInUserInfo>(profileContent);
 
                 if (profileData == null)
                 {
+                    _logger.LogError("Failed to deserialize LinkedIn profile data");
                     throw new UnauthorizedAccessException("Invalid profile data from LinkedIn");
                 }
 
@@ -529,8 +543,10 @@ namespace CareerConnect.Server.Services
                 if (string.IsNullOrEmpty(email))
                 {
                     email = $"linkedin_{profileData.Sub}@careerconnect.temp";
-                    _logger.LogInformation($"No email from LinkedIn, using temporary: {email}");
+                    _logger.LogWarning($"No email from LinkedIn, using temporary: {email}");
                 }
+
+                _logger.LogInformation($"LinkedIn user: {email} (ID: {profileData.Sub})");
 
                 var user = await _userRepository.GetByLinkedInIdAsync(profileData.Sub);
 
@@ -540,13 +556,13 @@ namespace CareerConnect.Server.Services
 
                     if (user != null)
                     {
-                        // Link LinkedIn to existing account
+                        _logger.LogInformation($"Linking LinkedIn to existing user: {email}");
                         user.LinkedInId = profileData.Sub;
                         await _userRepository.UpdateAsync(user);
                     }
                     else
                     {
-                        // Create new user
+                        _logger.LogInformation($"Creating new user from LinkedIn: {email}");
                         user = new User
                         {
                             Email = email,
@@ -565,7 +581,7 @@ namespace CareerConnect.Server.Services
 
                 var token = _jwtHelper.GenerateToken(user!);
 
-                _logger.LogInformation($"LinkedIn login completed for {email}");
+                _logger.LogInformation($"LinkedIn login completed successfully for {email}");
 
                 return new AuthResponseDto
                 {

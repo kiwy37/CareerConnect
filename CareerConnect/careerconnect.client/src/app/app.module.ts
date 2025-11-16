@@ -7,12 +7,17 @@ import { AppComponent } from './app.component';
 import { LoginComponent } from './auth/login/login.component';
 import { AuthInterceptor } from './auth/auth.interceptor';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
-import { RouterModule } from '@angular/router';
+import { EmployerDashboardComponent } from './auth/dashboard/employer-dashboard/employer-dashboard.component';
+import { AdminDashboardComponent } from './auth/dashboard/admin-dashboard/admin-dashboard.component';
+import { EmployeeDashboardComponent } from './auth/dashboard/employee-dashboard/employee-dashboard.component';
 
 @NgModule({
   declarations: [
     AppComponent,
-    LoginComponent
+    LoginComponent,
+    AdminDashboardComponent,
+    EmployerDashboardComponent,
+    EmployeeDashboardComponent
   ],
   imports: [
     BrowserModule,
