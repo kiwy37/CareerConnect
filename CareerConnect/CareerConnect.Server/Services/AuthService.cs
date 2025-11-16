@@ -229,39 +229,114 @@ namespace CareerConnect.Server.Services
 
         private async Task<User> HandleFacebookLoginAsync(SocialLoginDto dto)
         {
-            // Verificăm token-ul Facebook
-            var httpClient = _httpClientFactory.CreateClient();
-            var response = await httpClient.GetAsync($"https://graph.facebook.com/me?access_token={dto.AccessToken}&fields=id,email,first_name,last_name");
-
-            if (!response.IsSuccessStatusCode)
-                throw new UnauthorizedAccessException("Token Facebook invalid");
-
-            var userData = await JsonSerializer.DeserializeAsync<FacebookUserData>(await response.Content.ReadAsStreamAsync());
-
-            var user = await _userRepository.GetByEmailAsync(userData!.Email);
-
-            if (user == null)
+            try
             {
-                user = new User
+                // Check if basic data is provided from the frontend
+                if (!string.IsNullOrEmpty(dto.Email) &&
+                    !string.IsNullOrEmpty(dto.FirstName) &&
+                    !string.IsNullOrEmpty(dto.LastName) &&
+                    !string.IsNullOrEmpty(dto.ProviderId))
                 {
-                    Email = userData.Email,
-                    FacebookId = userData.Id,
-                    Nume = userData.Last_Name,
-                    Prenume = userData.First_Name,
-                    RolId = 2,
-                    DataNastere = DateTime.UtcNow.AddYears(-18),
-                    CreatedAt = DateTime.UtcNow
-                };
+                    _logger.LogInformation($"Facebook login with provided data: {dto.Email}");
 
-                user = await _userRepository.CreateAsync(user);
+                    // Use data directly from DTO (already validated by Angular)
+                    var user = await _userRepository.GetByFacebookIdAsync(dto.ProviderId);
+
+                    if (user == null)
+                    {
+                        // Check if user exists by email
+                        user = await _userRepository.GetByEmailAsync(dto.Email);
+
+                        if (user != null)
+                        {
+                            // Link Facebook to existing account
+                            user.FacebookId = dto.ProviderId;
+                            await _userRepository.UpdateAsync(user);
+                        }
+                        else
+                        {
+                            // Create new user
+                            user = new User
+                            {
+                                Email = dto.Email,
+                                FacebookId = dto.ProviderId,
+                                Nume = dto.LastName,
+                                Prenume = dto.FirstName,
+                                RolId = 2,
+                                DataNastere = DateTime.UtcNow.AddYears(-18),
+                                CreatedAt = DateTime.UtcNow
+                            };
+
+                            user = await _userRepository.CreateAsync(user);
+                            user = await _userRepository.GetByIdAsync(user.Id);
+                        }
+                    }
+
+                    return user!;
+                }
+
+                // Fallback: Verify token with Facebook API
+                _logger.LogInformation("Verifying Facebook token with Facebook API");
+                var httpClient = _httpClientFactory.CreateClient();
+                var response = await httpClient.GetAsync(
+                    $"https://graph.facebook.com/me?access_token={dto.AccessToken}&fields=id,email,first_name,last_name"
+                );
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"Facebook API error: {errorContent}");
+                    throw new UnauthorizedAccessException("Token Facebook invalid");
+                }
+
+                var content = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation($"Facebook API response: {content}");
+
+                var userData = await JsonSerializer.DeserializeAsync<FacebookUserData>(
+                    await response.Content.ReadAsStreamAsync()
+                );
+
+                if (userData == null || string.IsNullOrEmpty(userData.Email))
+                {
+                    throw new UnauthorizedAccessException("Nu s-au putut obține datele de la Facebook");
+                }
+
+                var existingUser = await _userRepository.GetByFacebookIdAsync(userData.Id);
+
+                if (existingUser == null)
+                {
+                    existingUser = await _userRepository.GetByEmailAsync(userData.Email);
+
+                    if (existingUser != null)
+                    {
+                        existingUser.FacebookId = userData.Id;
+                        await _userRepository.UpdateAsync(existingUser);
+                    }
+                    else
+                    {
+                        existingUser = new User
+                        {
+                            Email = userData.Email,
+                            FacebookId = userData.Id,
+                            Nume = userData.Last_Name,
+                            Prenume = userData.First_Name,
+                            RolId = 2,
+                            DataNastere = DateTime.UtcNow.AddYears(-18),
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        existingUser = await _userRepository.CreateAsync(existingUser);
+                        existingUser = await _userRepository.GetByIdAsync(existingUser.Id);
+                    }
+                }
+
+                return existingUser!;
             }
-            else if (string.IsNullOrEmpty(user.FacebookId))
+            catch (Exception ex)
             {
-                user.FacebookId = userData.Id;
-                await _userRepository.UpdateAsync(user);
+                _logger.LogError(ex, "Error in HandleFacebookLoginAsync");
+                throw;
             }
-
-            return user;
         }
 
         private async Task<User> HandleTwitterLoginAsync(SocialLoginDto dto)

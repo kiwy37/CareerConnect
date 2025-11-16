@@ -79,5 +79,16 @@ namespace CareerConnect.Server.Controllers
             var response = await _authService.GoogleLoginAsync(googleLoginDto);
             return Ok(response);
         }
+
+        // NEW ENDPOINT - Add this method
+        [HttpPost("social-login")]
+        public async Task<ActionResult<AuthResponseDto>> SocialLogin([FromBody] SocialLoginDto socialLoginDto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var response = await _authService.SocialLoginAsync(socialLoginDto);
+            return Ok(response);
+        }
     }
 }

@@ -69,35 +69,56 @@ export class LoginComponent implements OnInit {
   }
 
 onFacebookLogin() {
-    FB.login((response: any) => {
-      if (response.authResponse) {
-        this.isLoading = true;
-        
-        // Obține informațiile utilizatorului
-        FB.api('/me', { fields: 'id,email,first_name,last_name' }, (userInfo: any) => {
-          this.authService.facebookLogin(
-            response.authResponse.accessToken,
-            userInfo.email,
-            userInfo.first_name,
-            userInfo.last_name,
-            userInfo.id
-          ).subscribe({
-            next: (authResponse) => {
-              this.isLoading = false;
-              this.handleSuccessfulAuth(authResponse);
-            },
-            error: (err) => {
-              this.isLoading = false;
-              console.error('Eroare Facebook login:', err);
-              this.errors.general = 'Facebook login failed. Please try again.';
-            }
-          });
-        });
-      } else {
-        console.log('User cancelled login or did not fully authorize.');
-      }
-    }, { scope: 'public_profile' }); 
-  }
+  FB.login((response: any) => {
+    if (response.authResponse) {
+      console.log('Facebook auth response:', response.authResponse);
+      this.isLoading = true;
+      
+      // Obține informațiile utilizatorului
+      FB.api('/me', { fields: 'id,email,first_name,last_name' }, (userInfo: any) => {
+        console.log('Facebook user info:', userInfo);
+        
+        // Check if email is available
+        if (!userInfo.email) {
+          this.isLoading = false;
+          this.errors.general = 'Email is required from Facebook. Please grant email permission.';
+          return;
+        }
+        
+        this.authService.facebookLogin(
+          response.authResponse.accessToken,
+          userInfo.email,
+          userInfo.first_name,
+          userInfo.last_name,
+          userInfo.id
+        ).subscribe({
+          next: (authResponse) => {
+            this.isLoading = false;
+            console.log('Facebook login successful:', authResponse);
+            this.handleSuccessfulAuth(authResponse);
+          },
+          error: (err) => {
+            this.isLoading = false;
+            console.error('Eroare Facebook login:', err);
+            
+            // Better error handling
+            if (err.error?.error) {
+              this.errors.general = err.error.error;
+            } else if (err.error?.message) {
+              this.errors.general = err.error.message;
+            } else {
+              this.errors.general = 'Facebook login failed. Please try again.';
+            }
+          }
+        });
+      });
+    } else {
+      console.log('User cancelled login or did not fully authorize.');
+    }
+  }, { 
+    scope: 'public_profile'  // Only request public_profile for now
+  }); 
+}
 
   // ==================== Google SDK ====================
   initGoogleSDK() {
