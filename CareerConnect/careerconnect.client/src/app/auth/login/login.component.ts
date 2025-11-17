@@ -14,7 +14,7 @@ declare const google: any;
 export class LoginComponent implements OnInit {
   private linkedInConfig = {
     clientId: '77qbiu7uucxtzn',
-    redirectUri: 'https://localhost:52623', // Must match LinkedIn settings exactly
+    redirectUri: 'https://localhost:52623',
   };
 
   showLogin = true;
@@ -42,7 +42,6 @@ export class LoginComponent implements OnInit {
   constructor(private authService: AuthService, private router: Router) {}
 
   ngOnInit() {
-    // Inițializează SDK-urile pentru social login
     this.initFacebookSDK();
     this.initGoogleSDK();
     this.initLinkedInSDK();
@@ -55,13 +54,11 @@ export class LoginComponent implements OnInit {
 
   // ==================== Facebook SDK ====================
   initFacebookSDK() {
-    // Verifică dacă SDK-ul FB este deja încărcat
     if (typeof FB !== 'undefined') {
       this.configureFacebookSDK();
       return;
     }
 
-    // Încarcă SDK-ul Facebook
     const script = document.createElement('script');
     script.src = 'https://connect.facebook.net/en_US/sdk.js';
     script.async = true;
@@ -72,7 +69,7 @@ export class LoginComponent implements OnInit {
 
   configureFacebookSDK() {
     FB.init({
-      appId: '25212061275130005', // ID-ul tău din appsettings.json
+      appId: '25212061275130005',
       cookie: true,
       xfbml: true,
       version: 'v18.0',
@@ -86,23 +83,20 @@ export class LoginComponent implements OnInit {
           console.log('Facebook auth response:', response.authResponse);
           this.isLoading = true;
 
+          // Cerem doar first_name și last_name, fără email
           FB.api(
             '/me',
-            { fields: 'id,email,first_name,last_name' },
+            { fields: 'id,first_name,last_name' },
             (userInfo: any) => {
               console.log('Facebook user info:', userInfo);
 
-              if (!userInfo.email) {
-                this.isLoading = false;
-                this.errors.general =
-                  'Email is required from Facebook. Please grant email permission.';
-                return;
-              }
+              // Generăm un email temporar bazat pe ID-ul Facebook
+              const tempEmail = `facebook_${userInfo.id}@careerconnect.temp`;
 
               this.authService
                 .facebookLogin(
                   response.authResponse.accessToken,
-                  userInfo.email,
+                  tempEmail,
                   userInfo.first_name,
                   userInfo.last_name,
                   userInfo.id
@@ -111,7 +105,8 @@ export class LoginComponent implements OnInit {
                   next: (authResponse) => {
                     this.isLoading = false;
                     console.log('Facebook login successful:', authResponse);
-                    this.handleSuccessfulAuth(authResponse, true); // Pass true for social login
+                    // Redirecționăm întotdeauna către landing page
+                    this.handleSuccessfulAuth(authResponse, true);
                   },
                   error: (err) => {
                     this.isLoading = false;
@@ -130,7 +125,7 @@ export class LoginComponent implements OnInit {
           );
         }
       },
-      { scope: 'public_profile' }
+      { scope: 'public_profile' } // Cerem doar profilul public, fără email
     );
   }
 
@@ -162,7 +157,8 @@ export class LoginComponent implements OnInit {
     this.authService.googleLogin(response.credential).subscribe({
       next: (authResponse) => {
         this.isLoading = false;
-        this.handleSuccessfulAuth(authResponse);
+        // Google merge și el pe landing page
+        this.handleSuccessfulAuth(authResponse, true);
       },
       error: (err) => {
         this.isLoading = false;
@@ -174,7 +170,6 @@ export class LoginComponent implements OnInit {
 
   // ==================== Twitter Login ====================
   onTwitterLogin() {
-    // Twitter necesită OAuth pe partea de backend
     this.errors.general = 'Twitter login is not yet implemented.';
   }
 
@@ -183,7 +178,6 @@ export class LoginComponent implements OnInit {
     const state = this.generateRandomState();
     sessionStorage.setItem('linkedin_oauth_state', state);
 
-    // Build LinkedIn OAuth URL
     const authUrl =
       'https://www.linkedin.com/oauth/v2/authorization?' +
       `response_type=code&` +
@@ -192,7 +186,6 @@ export class LoginComponent implements OnInit {
       `state=${state}&` +
       `scope=openid%20profile%20email`;
 
-    // Open in same window (like Facebook does)
     window.location.href = authUrl;
   }
 
@@ -205,7 +198,6 @@ export class LoginComponent implements OnInit {
   }
 
   private checkLinkedInCallback() {
-    // Check if we're coming back from LinkedIn
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     const state = urlParams.get('state');
@@ -213,7 +205,6 @@ export class LoginComponent implements OnInit {
 
     if (error) {
       this.errors.general = 'LinkedIn authentication was cancelled or failed.';
-      // Clean URL
       window.history.replaceState({}, document.title, '/login');
       return;
     }
@@ -227,18 +218,15 @@ export class LoginComponent implements OnInit {
         return;
       }
 
-      // Clear state
       sessionStorage.removeItem('linkedin_oauth_state');
-
-      // Show loading
       this.isLoading = true;
 
-      // Send code to backend
       this.authService.linkedInLogin(code).subscribe({
         next: (authResponse) => {
           this.isLoading = false;
           window.history.replaceState({}, document.title, '/login');
-          this.handleSuccessfulAuth(authResponse);
+          // LinkedIn merge și el pe landing page
+          this.handleSuccessfulAuth(authResponse, true);
         },
         error: (err) => {
           this.isLoading = false;
@@ -424,7 +412,8 @@ export class LoginComponent implements OnInit {
       this.authService.completeLogin(this.currentEmail, code).subscribe({
         next: (response) => {
           this.isVerifying = false;
-          this.handleSuccessfulAuth(response);
+          // Login normal merge pe dashboard în funcție de rol
+          this.handleSuccessfulAuth(response, false);
         },
         error: (err) => {
           this.isVerifying = false;
@@ -446,7 +435,8 @@ export class LoginComponent implements OnInit {
       this.authService.finalizeRegister(registerRequest, code).subscribe({
         next: (response) => {
           this.isVerifying = false;
-          this.handleSuccessfulAuth(response);
+          // Register normal merge pe dashboard în funcție de rol
+          this.handleSuccessfulAuth(response, false);
         },
         error: (err) => {
           this.isVerifying = false;
@@ -461,11 +451,11 @@ export class LoginComponent implements OnInit {
     this.successMessage = 'Authentication successful! Redirecting...';
 
     setTimeout(() => {
-      // If it's a social login (Facebook, Google, LinkedIn, Twitter), go to landing page
       if (isSocialLogin) {
+        // Social login merge întotdeauna pe landing page
         this.router.navigate(['/landing']);
       } else {
-        // Regular login goes directly to dashboard based on role
+        // Login/register normal merge pe dashboard în funcție de rol
         const role = response.user.rolNume;
         if (role === 'admin') {
           this.router.navigate(['/admin']);

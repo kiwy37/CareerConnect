@@ -89,5 +89,12 @@ namespace CareerConnect.Server.Controllers
             var response = await _authService.LinkedInLoginAsync(linkedInLoginDto);
             return Ok(response);
         }
+
+        [HttpPost("social-login")]
+        public async Task<ActionResult<AuthResponseDto>> SocialLogin([FromBody] SocialLoginDto dto)
+        {
+            var response = await _authService.SocialLoginAsync(dto);
+            return Ok(response);
+        }
     }
 }
