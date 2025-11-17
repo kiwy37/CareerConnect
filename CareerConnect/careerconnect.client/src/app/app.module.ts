@@ -7,20 +7,18 @@ import { AppComponent } from './app.component';
 import { LoginComponent } from './auth/login/login.component';
 import { AuthInterceptor } from './auth/auth.interceptor';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
-import { EmployerDashboardComponent } from './auth/dashboard/employer-dashboard/employer-dashboard.component';
-import { AdminDashboardComponent } from './auth/dashboard/admin-dashboard/admin-dashboard.component';
-import { EmployeeDashboardComponent } from './auth/dashboard/employee-dashboard/employee-dashboard.component';
+import { CommonModule } from '@angular/common';
+import { LandingPageComponent } from './landing-page/landing-page.component';
 
 @NgModule({
   declarations: [
     AppComponent,
     LoginComponent,
-    AdminDashboardComponent,
-    EmployerDashboardComponent,
-    EmployeeDashboardComponent
+    LandingPageComponent
   ],
   imports: [
     BrowserModule,
+    CommonModule,
     HttpClientModule,
     FormsModule,
     AppRoutingModule,

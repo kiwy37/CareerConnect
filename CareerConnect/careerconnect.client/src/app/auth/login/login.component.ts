@@ -86,14 +86,12 @@ export class LoginComponent implements OnInit {
           console.log('Facebook auth response:', response.authResponse);
           this.isLoading = true;
 
-          // Obține informațiile utilizatorului
           FB.api(
             '/me',
             { fields: 'id,email,first_name,last_name' },
             (userInfo: any) => {
               console.log('Facebook user info:', userInfo);
 
-              // Check if email is available
               if (!userInfo.email) {
                 this.isLoading = false;
                 this.errors.general =
@@ -113,13 +111,11 @@ export class LoginComponent implements OnInit {
                   next: (authResponse) => {
                     this.isLoading = false;
                     console.log('Facebook login successful:', authResponse);
-                    this.handleSuccessfulAuth(authResponse);
+                    this.handleSuccessfulAuth(authResponse, true); // Pass true for social login
                   },
                   error: (err) => {
                     this.isLoading = false;
                     console.error('Eroare Facebook login:', err);
-
-                    // Better error handling
                     if (err.error?.error) {
                       this.errors.general = err.error.error;
                     } else if (err.error?.message) {
@@ -132,13 +128,9 @@ export class LoginComponent implements OnInit {
                 });
             }
           );
-        } else {
-          console.log('User cancelled login or did not fully authorize.');
         }
       },
-      {
-        scope: 'public_profile', // Only request public_profile for now
-      }
+      { scope: 'public_profile' }
     );
   }
 
@@ -465,17 +457,23 @@ export class LoginComponent implements OnInit {
     }
   }
 
-  private handleSuccessfulAuth(response: any) {
+  private handleSuccessfulAuth(response: any, isSocialLogin: boolean = false) {
     this.successMessage = 'Authentication successful! Redirecting...';
 
     setTimeout(() => {
-      const role = response.user.rolNume;
-      if (role === 'admin') {
-        this.router.navigate(['/admin']);
-      } else if (role === 'angajator') {
-        this.router.navigate(['/employer']);
+      // If it's a social login (Facebook, Google, LinkedIn, Twitter), go to landing page
+      if (isSocialLogin) {
+        this.router.navigate(['/landing']);
       } else {
-        this.router.navigate(['/employee']);
+        // Regular login goes directly to dashboard based on role
+        const role = response.user.rolNume;
+        if (role === 'admin') {
+          this.router.navigate(['/admin']);
+        } else if (role === 'angajator') {
+          this.router.navigate(['/employer']);
+        } else {
+          this.router.navigate(['/employee']);
+        }
       }
     }, 1500);
   }
