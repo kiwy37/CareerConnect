@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace CareerConnect.Server.DTOs
 {
+    // ==================== Social Login DTOs ====================
     public class SocialLoginDto
     {
         [Required]
@@ -32,13 +33,35 @@ namespace CareerConnect.Server.DTOs
         public string Name { get; set; } = string.Empty;
     }
 
-    public class LinkedInUserData
+    // ==================== LinkedIn DTOs ====================
+    public class LinkedInLoginDto
     {
-        public string Id { get; set; } = string.Empty;
-        public string EmailAddress { get; set; } = string.Empty;
-        public string FirstName { get; set; } = string.Empty;
-        public string LastName { get; set; } = string.Empty;
+        [Required]
+        public string Code { get; set; } = string.Empty;
     }
+
+    public class LinkedInUserInfo
+    {
+        [JsonPropertyName("sub")]
+        public string Sub { get; set; } = string.Empty;
+
+        [JsonPropertyName("email")]
+        public string Email { get; set; } = string.Empty;
+
+        [JsonPropertyName("given_name")]
+        public string GivenName { get; set; } = string.Empty;
+
+        [JsonPropertyName("family_name")]
+        public string FamilyName { get; set; } = string.Empty;
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("picture")]
+        public string Picture { get; set; } = string.Empty;
+    }
+
+    // ==================== Registration DTOs ====================
     public class CreateUserWithCodeDto
     {
         [Required(ErrorMessage = "Email-ul este obligatoriu")]
@@ -72,30 +95,39 @@ namespace CareerConnect.Server.DTOs
         public string Code { get; set; } = string.Empty;
     }
 
-    public class LinkedInLoginDto
+    // ==================== Forgot Password DTOs ====================
+    public class ForgotPasswordDto
     {
-        [Required]
+        [Required(ErrorMessage = "Email-ul este obligatoriu")]
+        [EmailAddress(ErrorMessage = "Format email invalid")]
+        public string Email { get; set; } = string.Empty;
+    }
+
+    public class VerifyResetCodeDto
+    {
+        [Required(ErrorMessage = "Email-ul este obligatoriu")]
+        [EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Codul este obligatoriu")]
+        [StringLength(6, MinimumLength = 6, ErrorMessage = "Codul trebuie să conțină exact 6 cifre")]
+        [RegularExpression("^[0-9]{6}$", ErrorMessage = "Codul trebuie să conțină doar cifre")]
         public string Code { get; set; } = string.Empty;
     }
 
-    public class LinkedInUserInfo
+    public class ResetPasswordDto
     {
-        [JsonPropertyName("sub")]
-        public string Sub { get; set; } = string.Empty;
-
-        [JsonPropertyName("email")]
+        [Required(ErrorMessage = "Email-ul este obligatoriu")]
+        [EmailAddress]
         public string Email { get; set; } = string.Empty;
 
-        [JsonPropertyName("given_name")]
-        public string GivenName { get; set; } = string.Empty;
+        [Required(ErrorMessage = "Codul este obligatoriu")]
+        [StringLength(6, MinimumLength = 6, ErrorMessage = "Codul trebuie să conțină exact 6 cifre")]
+        public string Code { get; set; } = string.Empty;
 
-        [JsonPropertyName("family_name")]
-        public string FamilyName { get; set; } = string.Empty;
-
-        [JsonPropertyName("name")]
-        public string Name { get; set; } = string.Empty;
-
-        [JsonPropertyName("picture")]
-        public string Picture { get; set; } = string.Empty;
+        [Required(ErrorMessage = "Parola nouă este obligatorie")]
+        [MinLength(6, ErrorMessage = "Parola trebuie să conțină minim 6 caractere")]
+        public string NewPassword { get; set; } = string.Empty;
     }
+
 }

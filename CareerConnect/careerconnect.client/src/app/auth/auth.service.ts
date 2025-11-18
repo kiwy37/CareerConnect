@@ -34,6 +34,7 @@ export interface RegisterRequest {
 export interface VerifyCodeDto {
   email: string;
   code: string;
+  verificationType: string;
 }
 
 export interface CreateUserWithCodeDto extends RegisterRequest {
@@ -51,6 +52,21 @@ export interface SocialLoginDto {
 
 export interface LinkedInLoginDto {
   code: string;
+}
+
+export interface ForgotPasswordDto {
+  email: string;
+}
+
+export interface VerifyResetCodeDto {
+  email: string;
+  code: string;
+}
+
+export interface ResetPasswordDto {
+  email: string;
+  code: string;
+  newPassword: string;
 }
 
 @Injectable({
@@ -71,14 +87,14 @@ export class AuthService {
     }
   }
 
-  // Metode pentru login flow
+  // Login flow methods
   initiateLogin(email: string, parola: string): Observable<any> {
     const request: LoginRequest = { email, parola };
     return this.http.post(`${this.apiUrl}/login/initiate`, request);
   }
 
   completeLogin(email: string, code: string): Observable<AuthResponse> {
-    const request: VerifyCodeDto = { email, code };
+    const request: VerifyCodeDto = { email, code, verificationType: 'Login' };
     return this.http.post<AuthResponse>(`${this.apiUrl}/login/complete`, request).pipe(
       tap(response => {
         this.setToken(response.token);
@@ -87,7 +103,7 @@ export class AuthService {
     );
   }
 
-  // Metode pentru register flow
+  // Register flow methods
   initiateRegister(data: RegisterRequest): Observable<any> {
     return this.http.post(`${this.apiUrl}/register/initiate`, data);
   }
@@ -102,7 +118,23 @@ export class AuthService {
     );
   }
 
-  // Metodă pentru resend code
+  // Forgot password methods
+  initiateForgotPassword(email: string): Observable<any> {
+    const request: ForgotPasswordDto = { email };
+    return this.http.post(`${this.apiUrl}/forgot-password`, request);
+  }
+
+  verifyResetCode(email: string, code: string): Observable<any> {
+    const request: VerifyResetCodeDto = { email, code };
+    return this.http.post(`${this.apiUrl}/verify-reset-code`, request);
+  }
+
+  resetPassword(email: string, code: string, newPassword: string): Observable<any> {
+    const request: ResetPasswordDto = { email, code, newPassword };
+    return this.http.post(`${this.apiUrl}/reset-password`, request);
+  }
+
+  // Resend code method
   resendVerificationCode(email: string, type: string): Observable<any> {
     const request = { email, verificationType: type };
     return this.http.post(`${this.apiUrl}/resend-code`, request);
@@ -152,7 +184,6 @@ export class AuthService {
     );
   }
 
-  // Fixed LinkedIn login - accepts authorization code
   linkedInLogin(code: string): Observable<AuthResponse> {
     const request: LinkedInLoginDto = { code };
     console.log('Sending LinkedIn code to backend:', code);

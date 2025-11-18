@@ -14,6 +14,6 @@ namespace CareerConnect.Server.DTOs
         public string Code { get; set; } = string.Empty;
 
         [Required]
-        public string VerificationType { get; set; } = string.Empty; // "Login" sau "Register"
+        public string VerificationType { get; set; } = string.Empty; // "Login", "Register", sau "ResetPassword"
     }
 }

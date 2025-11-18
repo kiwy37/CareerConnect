@@ -96,5 +96,37 @@ namespace CareerConnect.Server.Controllers
             var response = await _authService.SocialLoginAsync(dto);
             return Ok(response);
         }
+
+        // New endpoints for forgot password
+        [HttpPost("forgot-password")]
+        public async Task<ActionResult<PendingVerificationDto>> ForgotPassword([FromBody] ForgotPasswordDto forgotPasswordDto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var response = await _authService.InitiateForgotPasswordAsync(forgotPasswordDto, ipAddress);
+            return Ok(response);
+        }
+
+        [HttpPost("verify-reset-code")]
+        public async Task<IActionResult> VerifyResetCode([FromBody] VerifyResetCodeDto verifyResetCodeDto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var isValid = await _authService.VerifyResetCodeAsync(verifyResetCodeDto);
+            return Ok(new { valid = isValid, message = "Codul este valid" });
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto resetPasswordDto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var success = await _authService.ResetPasswordAsync(resetPasswordDto);
+            return Ok(new { success, message = "Parola a fost resetată cu succes" });
+        }
     }
 }

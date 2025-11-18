@@ -5,6 +5,8 @@ import { Router } from '@angular/router';
 declare const FB: any;
 declare const google: any;
 
+type ViewMode = 'login' | 'register' | 'verification' | 'forgotPassword' | 'resetPassword';
+
 @Component({
   selector: 'app-login',
   templateUrl: './login.component.html',
@@ -17,8 +19,7 @@ export class LoginComponent implements OnInit {
     redirectUri: 'https://localhost:52623',
   };
 
-  showLogin = true;
-  showVerification = false;
+  currentView: ViewMode = 'login';
   isLoading = false;
   isVerifying = false;
 
@@ -32,12 +33,15 @@ export class LoginComponent implements OnInit {
     birthdate: '',
   };
 
+  forgotPasswordData = { email: '' };
+  resetPasswordData = { newPassword: '', confirmPassword: '' };
+
   codeDigits = ['', '', '', '', '', ''];
   errors: any = {};
   successMessage = '';
   pendingVerification = false;
   currentEmail = '';
-  verificationType: 'login' | 'register' = 'login';
+  verificationType: 'Login' | 'Register' | 'ResetPassword' = 'Login';
 
   constructor(private authService: AuthService, private router: Router) {}
 
@@ -46,6 +50,34 @@ export class LoginComponent implements OnInit {
     this.initGoogleSDK();
     this.initLinkedInSDK();
     this.checkLinkedInCallback();
+  }
+
+  // View management
+  showView(view: ViewMode) {
+    this.currentView = view;
+    this.errors = {};
+    this.successMessage = '';
+    this.codeDigits = ['', '', '', '', '', ''];
+  }
+
+  get showLogin(): boolean {
+    return this.currentView === 'login';
+  }
+
+  get showRegister(): boolean {
+    return this.currentView === 'register';
+  }
+
+  get showVerification(): boolean {
+    return this.currentView === 'verification';
+  }
+
+  get showForgotPassword(): boolean {
+    return this.currentView === 'forgotPassword';
+  }
+
+  get showResetPassword(): boolean {
+    return this.currentView === 'resetPassword';
   }
 
   initLinkedInSDK() {
@@ -80,17 +112,12 @@ export class LoginComponent implements OnInit {
     FB.login(
       (response: any) => {
         if (response.authResponse) {
-          console.log('Facebook auth response:', response.authResponse);
           this.isLoading = true;
 
-          // Cerem doar first_name și last_name, fără email
           FB.api(
             '/me',
             { fields: 'id,first_name,last_name' },
             (userInfo: any) => {
-              console.log('Facebook user info:', userInfo);
-
-              // Generăm un email temporar bazat pe ID-ul Facebook
               const tempEmail = `facebook_${userInfo.id}@careerconnect.temp`;
 
               this.authService
@@ -104,28 +131,19 @@ export class LoginComponent implements OnInit {
                 .subscribe({
                   next: (authResponse) => {
                     this.isLoading = false;
-                    console.log('Facebook login successful:', authResponse);
-                    // Redirecționăm întotdeauna către landing page
                     this.handleSuccessfulAuth(authResponse, true);
                   },
                   error: (err) => {
                     this.isLoading = false;
                     console.error('Eroare Facebook login:', err);
-                    if (err.error?.error) {
-                      this.errors.general = err.error.error;
-                    } else if (err.error?.message) {
-                      this.errors.general = err.error.message;
-                    } else {
-                      this.errors.general =
-                        'Facebook login failed. Please try again.';
-                    }
+                    this.errors.general = err.error?.error || err.error?.message || 'Facebook login failed.';
                   },
                 });
             }
           );
         }
       },
-      { scope: 'public_profile' } // Cerem doar profilul public, fără email
+      { scope: 'public_profile' }
     );
   }
 
@@ -157,7 +175,6 @@ export class LoginComponent implements OnInit {
     this.authService.googleLogin(response.credential).subscribe({
       next: (authResponse) => {
         this.isLoading = false;
-        // Google merge și el pe landing page
         this.handleSuccessfulAuth(authResponse, true);
       },
       error: (err) => {
@@ -192,9 +209,7 @@ export class LoginComponent implements OnInit {
   private generateRandomState(): string {
     const array = new Uint32Array(2);
     window.crypto.getRandomValues(array);
-    return Array.from(array, (dec) => ('0' + dec.toString(16)).substr(-2)).join(
-      ''
-    );
+    return Array.from(array, (dec) => ('0' + dec.toString(16)).substr(-2)).join('');
   }
 
   private checkLinkedInCallback() {
@@ -225,27 +240,19 @@ export class LoginComponent implements OnInit {
         next: (authResponse) => {
           this.isLoading = false;
           window.history.replaceState({}, document.title, '/login');
-          // LinkedIn merge și el pe landing page
           this.handleSuccessfulAuth(authResponse, true);
         },
         error: (err) => {
           this.isLoading = false;
           console.error('LinkedIn login error:', err);
           window.history.replaceState({}, document.title, '/login');
-
-          if (err.error?.error) {
-            this.errors.general = err.error.error;
-          } else if (err.error?.message) {
-            this.errors.general = err.error.message;
-          } else {
-            this.errors.general = 'LinkedIn login failed. Please try again.';
-          }
+          this.errors.general = err.error?.error || err.error?.message || 'LinkedIn login failed.';
         },
       });
     }
   }
 
-  // ==================== Rest of existing methods ====================
+  // ==================== Login ====================
   onLogin() {
     this.errors = {};
     this.successMessage = '';
@@ -256,8 +263,7 @@ export class LoginComponent implements OnInit {
     }
 
     if (this.loginData.password.length < 6) {
-      this.errors.loginPassword =
-        'Password must be at least 6 characters long.';
+      this.errors.loginPassword = 'Password must be at least 6 characters long.';
       return;
     }
 
@@ -270,8 +276,8 @@ export class LoginComponent implements OnInit {
           this.isLoading = false;
           this.pendingVerification = true;
           this.currentEmail = this.loginData.email;
-          this.verificationType = 'login';
-          this.showVerification = true;
+          this.verificationType = 'Login';
+          this.showView('verification');
           this.successMessage = 'Verification code sent to your email!';
         },
         error: (err) => {
@@ -279,17 +285,9 @@ export class LoginComponent implements OnInit {
           console.error('Eroare initiere login:', err);
 
           if (err.status === 0) {
-            this.errors.loginPassword =
-              'Cannot connect to server. Please check if backend is running.';
+            this.errors.loginPassword = 'Cannot connect to server.';
           } else if (err.error?.message) {
             this.errors.loginPassword = err.error.message;
-          } else if (err.error?.errors) {
-            Object.keys(err.error.errors).forEach((key) => {
-              const errorKey = `login${
-                key.charAt(0).toUpperCase() + key.slice(1)
-              }`;
-              this.errors[errorKey] = err.error.errors[key][0];
-            });
           } else {
             this.errors.loginPassword = 'An error occurred. Please try again.';
           }
@@ -297,6 +295,7 @@ export class LoginComponent implements OnInit {
       });
   }
 
+  // ==================== Register ====================
   onRegister() {
     this.errors = {};
     this.successMessage = '';
@@ -308,8 +307,7 @@ export class LoginComponent implements OnInit {
     }
 
     if (this.registerData.password.length < 6) {
-      this.errors.registerPassword =
-        'Password must be at least 6 characters long.';
+      this.errors.registerPassword = 'Password must be at least 6 characters long.';
       isValid = false;
     }
 
@@ -323,7 +321,7 @@ export class LoginComponent implements OnInit {
       isValid = false;
     }
 
-    if (!this.validatePhone(this.registerData.phone)) {
+    if (this.registerData.phone && !this.validatePhone(this.registerData.phone)) {
       this.errors.registerPhone = 'Please enter a valid phone number.';
       isValid = false;
     }
@@ -368,28 +366,21 @@ export class LoginComponent implements OnInit {
         this.isLoading = false;
         this.pendingVerification = true;
         this.currentEmail = this.registerData.email;
-        this.verificationType = 'register';
-        this.showVerification = true;
+        this.verificationType = 'Register';
+        this.showView('verification');
         this.successMessage = 'Verification code sent to your email!';
       },
       error: (err) => {
         this.isLoading = false;
         console.error('Eroare initiere înregistrare:', err);
 
-        if (err.status === 0) {
-          this.errors.general =
-            'Cannot connect to server. Please check if backend is running.';
-        } else if (err.error?.message) {
+        if (err.error?.message) {
           this.errors.general = err.error.message;
         } else if (err.error?.errors) {
           Object.keys(err.error.errors).forEach((key) => {
-            const errorKey = `register${
-              key.charAt(0).toUpperCase() + key.slice(1)
-            }`;
+            const errorKey = `register${key.charAt(0).toUpperCase() + key.slice(1)}`;
             this.errors[errorKey] = err.error.errors[key][0];
           });
-        } else if (err.error?.title) {
-          this.errors.general = err.error.title;
         } else {
           this.errors.general = 'An error occurred. Please try again.';
         }
@@ -397,6 +388,40 @@ export class LoginComponent implements OnInit {
     });
   }
 
+  // ==================== Forgot Password ====================
+  onForgotPassword() {
+    this.errors = {};
+    this.successMessage = '';
+
+    if (!this.validateEmail(this.forgotPasswordData.email)) {
+      this.errors.forgotEmail = 'Please enter a valid email address.';
+      return;
+    }
+
+    this.isLoading = true;
+
+    this.authService.initiateForgotPassword(this.forgotPasswordData.email).subscribe({
+      next: (response) => {
+        this.isLoading = false;
+        this.currentEmail = this.forgotPasswordData.email;
+        this.verificationType = 'ResetPassword';
+        this.showView('verification');
+        this.successMessage = 'Verification code sent to your email!';
+      },
+      error: (err) => {
+        this.isLoading = false;
+        console.error('Eroare forgot password:', err);
+
+        if (err.error?.message) {
+          this.errors.forgotEmail = err.error.message;
+        } else {
+          this.errors.forgotEmail = 'An error occurred. Please try again.';
+        }
+      },
+    });
+  }
+
+  // ==================== Verify Code ====================
   verifyCode() {
     const code = this.codeDigits.join('');
 
@@ -408,12 +433,24 @@ export class LoginComponent implements OnInit {
     this.isVerifying = true;
     this.errors.verification = '';
 
-    if (this.verificationType === 'login') {
+    if (this.verificationType === 'ResetPassword') {
+      this.authService.verifyResetCode(this.currentEmail, code).subscribe({
+        next: (response) => {
+          this.isVerifying = false;
+          this.showView('resetPassword');
+          this.successMessage = 'Code verified! Please enter your new password.';
+        },
+        error: (err) => {
+          this.isVerifying = false;
+          console.error('Eroare verificare cod reset:', err);
+          this.handleVerificationError(err);
+        },
+      });
+    } else if (this.verificationType === 'Login') {
       this.authService.completeLogin(this.currentEmail, code).subscribe({
         next: (response) => {
           this.isVerifying = false;
-          // Login normal merge pe dashboard în funcție de rol
-          this.handleSuccessfulAuth(response, false);
+          this.router.navigate(['/landing']);
         },
         error: (err) => {
           this.isVerifying = false;
@@ -435,8 +472,7 @@ export class LoginComponent implements OnInit {
       this.authService.finalizeRegister(registerRequest, code).subscribe({
         next: (response) => {
           this.isVerifying = false;
-          // Register normal merge pe dashboard în funcție de rol
-          this.handleSuccessfulAuth(response, false);
+          this.router.navigate(['/landing']);
         },
         error: (err) => {
           this.isVerifying = false;
@@ -447,37 +483,63 @@ export class LoginComponent implements OnInit {
     }
   }
 
+  // ==================== Reset Password ====================
+  onResetPassword() {
+    this.errors = {};
+
+    if (this.resetPasswordData.newPassword.length < 6) {
+      this.errors.newPassword = 'Password must be at least 6 characters long.';
+      return;
+    }
+
+    if (this.resetPasswordData.newPassword !== this.resetPasswordData.confirmPassword) {
+      this.errors.confirmPassword = 'Passwords do not match.';
+      return;
+    }
+
+    this.isLoading = true;
+    const code = this.codeDigits.join('');
+
+    this.authService
+      .resetPassword(this.currentEmail, code, this.resetPasswordData.newPassword)
+      .subscribe({
+        next: (response) => {
+          this.isLoading = false;
+          this.successMessage = 'Password reset successfully! Redirecting to login...';
+
+          setTimeout(() => {
+            this.showView('login');
+            this.resetPasswordData = { newPassword: '', confirmPassword: '' };
+            this.codeDigits = ['', '', '', '', '', ''];
+          }, 2000);
+        },
+        error: (err) => {
+          this.isLoading = false;
+          console.error('Eroare reset parolă:', err);
+
+          if (err.error?.message) {
+            this.errors.general = err.error.message;
+          } else {
+            this.errors.general = 'Failed to reset password. Please try again.';
+          }
+        },
+      });
+  }
+
+  // ==================== Helper Methods ====================
   private handleSuccessfulAuth(response: any, isSocialLogin: boolean = false) {
     this.successMessage = 'Authentication successful! Redirecting...';
 
     setTimeout(() => {
-      if (isSocialLogin) {
-        // Social login merge întotdeauna pe landing page
-        this.router.navigate(['/landing']);
-      } else {
-        // Login/register normal merge pe dashboard în funcție de rol
-        const role = response.user.rolNume;
-        if (role === 'admin') {
-          this.router.navigate(['/admin']);
-        } else if (role === 'angajator') {
-          this.router.navigate(['/employer']);
-        } else {
-          this.router.navigate(['/employee']);
-        }
-      }
+      this.router.navigate(['/landing']);
     }, 1500);
   }
 
   private handleVerificationError(err: any) {
     if (err.status === 0) {
-      this.errors.verification =
-        'Cannot connect to server. Please check if backend is running.';
+      this.errors.verification = 'Cannot connect to server.';
     } else if (err.error?.message) {
       this.errors.verification = err.error.message;
-    } else if (err.error?.errors) {
-      this.errors.verification = Object.values(err.error.errors)
-        .flat()
-        .join(', ');
     } else {
       this.errors.verification = 'Invalid verification code. Please try again.';
     }
@@ -500,8 +562,7 @@ export class LoginComponent implements OnInit {
   }
 
   backToLogin() {
-    this.showVerification = false;
-    this.showLogin = true;
+    this.showView('login');
     this.pendingVerification = false;
     this.codeDigits = ['', '', '', '', '', ''];
     this.errors = {};
@@ -530,21 +591,6 @@ export class LoginComponent implements OnInit {
     if (event.key === 'Backspace' && !event.target.value && index > 0) {
       const inputs = document.querySelectorAll('.code-input');
       (inputs[index - 1] as HTMLElement).focus();
-    }
-  }
-
-  onCodePaste(event: ClipboardEvent) {
-    event.preventDefault();
-    const pasteData = event.clipboardData?.getData('text').trim();
-
-    if (pasteData && /^\d{6}$/.test(pasteData)) {
-      const digits = pasteData.split('');
-      this.codeDigits = [...digits];
-
-      setTimeout(() => {
-        const inputs = document.querySelectorAll('.code-input');
-        (inputs[5] as HTMLElement).focus();
-      }, 0);
     }
   }
 

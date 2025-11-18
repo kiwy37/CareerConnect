@@ -1,7 +1,7 @@
 <div class="container">
   <div class="form-container">
     <!-- Formular de Înregistrare -->
-    <form class="form" [class.active]="!showLogin && !showVerification" id="register-form" (ngSubmit)="onRegister()" #registerForm="ngForm">
+    <form class="form" [class.active]="showRegister" id="register-form" (ngSubmit)="onRegister()" #registerForm="ngForm">
       <h2>Registration</h2>      
 
       <div class="form-group">
@@ -47,12 +47,12 @@
       </button>
       
       <div class="toggle-form">
-        Already have an account? <a (click)="showLogin = true; errors = {}">Login</a>
+        Already have an account? <a (click)="showView('login')">Login</a>
       </div>
     </form>
 
     <!-- Formular de Login -->
-    <form class="form" [class.active]="showLogin && !showVerification" id="login-form" (ngSubmit)="onLogin()" #loginForm="ngForm">
+    <form class="form" [class.active]="showLogin" id="login-form" (ngSubmit)="onLogin()" #loginForm="ngForm">
       <h2>Welcome Back!</h2>
       <div class="form-group">
         <label for="login-email">Email</label>
@@ -67,7 +67,7 @@
       </div>
       
       <div class="forgot-password">
-        <a href="#">Forget password?</a>
+        <a (click)="showView('forgotPassword')">Forget password?</a>
       </div>
       
       <button type="submit" [disabled]="isLoading">
@@ -94,8 +94,60 @@
       </div>
       
       <div class="toggle-form">
-        Don't have an account? <a (click)="showLogin = false; errors = {}">Register</a>
+        Don't have an account? <a (click)="showView('register')">Register</a>
       </div>
+    </form>
+
+    <!-- Forgot Password -->
+    <form class="form" [class.active]="showForgotPassword" id="forgot-password-form" (ngSubmit)="onForgotPassword()" #forgotPasswordForm="ngForm">
+      <h2>Forgot Password?</h2>
+      <p style="color: #666; margin-bottom: 20px;">Enter your email address and we'll send you a verification code to reset your password.</p>
+      
+      <div class="form-group">
+        <label for="forgot-email">Email</label>
+        <input type="email" id="forgot-email" [(ngModel)]="forgotPasswordData.email" name="forgotEmail" required>
+        <div class="error-message" [style.display]="errors.forgotEmail ? 'block' : 'none'">{{errors.forgotEmail}}</div>
+      </div>
+      
+      <button type="submit" [disabled]="isLoading">
+        <span *ngIf="!isLoading">Send Code</span>
+        <span *ngIf="isLoading">Sending...</span>
+      </button>
+      
+      <button type="button" class="back-button" (click)="showView('login')">Back to Login</button>
+    </form>
+
+    <!-- Reset Password -->
+    <form class="form" [class.active]="showResetPassword" id="reset-password-form" (ngSubmit)="onResetPassword()" #resetPasswordForm="ngForm">
+      <h2>Reset Password</h2>
+      <p style="color: #666; margin-bottom: 20px;">Enter your new password below.</p>
+      
+      <div class="form-group">
+        <label for="new-password">New Password</label>
+        <input type="password" id="new-password" [(ngModel)]="resetPasswordData.newPassword" name="newPassword" required>
+        <div class="error-message" [style.display]="errors.newPassword ? 'block' : 'none'">{{errors.newPassword}}</div>
+      </div>
+      
+      <div class="form-group">
+        <label for="confirm-password">Confirm Password</label>
+        <input type="password" id="confirm-password" [(ngModel)]="resetPasswordData.confirmPassword" name="confirmPassword" required>
+        <div class="error-message" [style.display]="errors.confirmPassword ? 'block' : 'none'">{{errors.confirmPassword}}</div>
+      </div>
+      
+      <div class="error-message" [style.display]="errors.general ? 'block' : 'none'" style="text-align: center;">
+        {{errors.general}}
+      </div>
+      
+      <div class="success-message" [style.display]="successMessage ? 'block' : 'none'" style="text-align: center; color: #10b981; margin-bottom: 10px;">
+        {{successMessage}}
+      </div>
+      
+      <button type="submit" [disabled]="isLoading">
+        <span *ngIf="!isLoading">Reset Password</span>
+        <span *ngIf="isLoading">Resetting...</span>
+      </button>
+      
+      <button type="button" class="back-button" (click)="showView('login')">Back to Login</button>
     </form>
 
     <!-- Verificare cod -->
@@ -112,6 +164,9 @@
       </div>
       <div class="error-message" [style.display]="errors.verification ? 'block' : 'none'" style="text-align: center;">
         {{errors.verification}}
+      </div>
+      <div class="success-message" [style.display]="successMessage ? 'block' : 'none'" style="text-align: center; color: #10b981; margin-bottom: 10px;">
+        {{successMessage}}
       </div>
       <button (click)="verifyCode()" [disabled]="isVerifying">
         <span *ngIf="!isVerifying">Verify Code</span>

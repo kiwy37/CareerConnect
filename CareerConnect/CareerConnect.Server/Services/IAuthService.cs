@@ -13,5 +13,9 @@ namespace CareerConnect.Server.Services
         Task ResendVerificationCodeAsync(ResendCodeDto resendCodeDto, string? ipAddress = null);
         Task<AuthResponseDto> SocialLoginAsync(SocialLoginDto socialLoginDto);
         Task<AuthResponseDto> LinkedInLoginAsync(LinkedInLoginDto linkedInLoginDto);
+
+        Task<PendingVerificationDto> InitiateForgotPasswordAsync(ForgotPasswordDto forgotPasswordDto, string? ipAddress = null);
+        Task<bool> VerifyResetCodeAsync(VerifyResetCodeDto verifyResetCodeDto);
+        Task<bool> ResetPasswordAsync(ResetPasswordDto resetPasswordDto);
     }
 }

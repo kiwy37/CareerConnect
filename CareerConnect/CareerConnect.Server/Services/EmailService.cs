@@ -32,13 +32,13 @@ namespace CareerConnect.Server.Services
                     EnableSsl = true,
                     UseDefaultCredentials = false,
                     Credentials = new NetworkCredential(senderEmail, senderPassword),
-                    Timeout = 30000 // 30 secunde
+                    Timeout = 30000
                 };
 
                 var mailMessage = new MailMessage
                 {
                     From = new MailAddress(senderEmail, senderName),
-                    Subject = $"Codul tău de verificare CareerConnect - {code}",
+                    Subject = GetEmailSubject(verificationType, code),
                     Body = GetEmailBody(code, verificationType),
                     IsBodyHtml = true
                 };
@@ -56,9 +56,32 @@ namespace CareerConnect.Server.Services
             }
         }
 
+        private string GetEmailSubject(string verificationType, string code)
+        {
+            return verificationType switch
+            {
+                "ResetPassword" => $"CareerConnect - Resetare Parolă - {code}",
+                _ => $"Codul tău de verificare CareerConnect - {code}"
+            };
+        }
+
         private string GetEmailBody(string code, string verificationType)
         {
-            var actionText = verificationType == "Login" ? "autentificarea" : "înregistrarea";
+            var actionText = verificationType switch
+            {
+                "Login" => "autentificarea",
+                "Register" => "înregistrarea",
+                "ResetPassword" => "resetarea parolei",
+                _ => "verificarea"
+            };
+
+            var title = verificationType == "ResetPassword"
+                ? "Resetare Parolă"
+                : "Cod de Verificare";
+
+            var message = verificationType == "ResetPassword"
+                ? "Ai solicitat resetarea parolei pe platforma CareerConnect. Folosește codul de mai jos pentru a continua:"
+                : $"Ai solicitat {actionText} pe platforma CareerConnect. Folosește codul de mai jos pentru a continua:";
 
             return $@"
 <!DOCTYPE html>
@@ -82,9 +105,9 @@ namespace CareerConnect.Server.Services
             <h1>CareerConnect</h1>
         </div>
         <div class='content'>
-            <h2>Cod de Verificare</h2>
+            <h2>{title}</h2>
             <p>Bună ziua,</p>
-            <p>Ai solicitat {actionText} pe platforma CareerConnect. Folosește codul de mai jos pentru a continua:</p>
+            <p>{message}</p>
             
             <div class='code-box'>
                 <div class='code'>{code}</div>
