@@ -77,6 +77,10 @@
       
       <div class="social-login">
         <p>or login with social platforms</p>
+        
+        <!-- Google Sign-In Button Container -->
+        <div id="googleButton" style="display: flex; justify-content: center; margin: 15px 0;"></div>
+        
         <div class="social-icons">
           <div class="social-icon facebook" (click)="onFacebookLogin()" title="Login with Facebook">
             <i class="fab fa-facebook-f"></i>
@@ -84,13 +88,14 @@
           <div class="social-icon twitter" (click)="onTwitterLogin()" title="Login with Twitter">
             <i class="fab fa-twitter"></i>
           </div>
-          <div class="social-icon google" (click)="onGoogleLogin()" title="Login with Google">
-            <i class="fab fa-google"></i>
-          </div>
           <div class="social-icon linkedin" (click)="onLinkedInLogin()" title="Login with LinkedIn">
             <i class="fab fa-linkedin-in"></i>
           </div>
         </div>
+      </div>
+
+      <div class="error-message" [style.display]="errors.general ? 'block' : 'none'" style="text-align: center; margin-top: 10px;">
+        {{errors.general}}
       </div>
       
       <div class="toggle-form">

@@ -1,4 +1,4 @@
-import { Component, ViewEncapsulation, OnInit } from '@angular/core';
+import { Component, ViewEncapsulation, OnInit, AfterViewInit } from '@angular/core';
 import { AuthService, RegisterRequest } from '../auth.service';
 import { Router } from '@angular/router';
 
@@ -13,11 +13,14 @@ type ViewMode = 'login' | 'register' | 'verification' | 'forgotPassword' | 'rese
   styleUrls: ['./login.component.css'],
   encapsulation: ViewEncapsulation.None,
 })
-export class LoginComponent implements OnInit {
+export class LoginComponent implements OnInit, AfterViewInit {
   private linkedInConfig = {
     clientId: '77qbiu7uucxtzn',
     redirectUri: 'https://localhost:52623',
   };
+
+  // Google Client ID
+  private googleClientId = '937265656787-unp24ld8lqsjbu8jh3rvmjct1i0d66ei.apps.googleusercontent.com';
 
   currentView: ViewMode = 'login';
   isLoading = false;
@@ -42,14 +45,20 @@ export class LoginComponent implements OnInit {
   pendingVerification = false;
   currentEmail = '';
   verificationType: 'Login' | 'Register' | 'ResetPassword' = 'Login';
+  googleButtonRendered = false;
 
   constructor(private authService: AuthService, private router: Router) {}
 
   ngOnInit() {
     this.initFacebookSDK();
-    this.initGoogleSDK();
     this.initLinkedInSDK();
     this.checkLinkedInCallback();
+    this.loadGoogleScript();
+  }
+
+  ngAfterViewInit() {
+    // Render Google button after view is initialized
+    setTimeout(() => this.renderGoogleButton(), 500);
   }
 
   // View management
@@ -58,6 +67,11 @@ export class LoginComponent implements OnInit {
     this.errors = {};
     this.successMessage = '';
     this.codeDigits = ['', '', '', '', '', ''];
+    
+    // Re-render Google button when switching to login view
+    if (view === 'login') {
+      setTimeout(() => this.renderGoogleButton(), 100);
+    }
   }
 
   get showLogin(): boolean {
@@ -148,39 +162,128 @@ export class LoginComponent implements OnInit {
   }
 
   // ==================== Google SDK ====================
-  initGoogleSDK() {
+  loadGoogleScript() {
+    // Check if script already exists
+    if (document.querySelector('script[src="https://accounts.google.com/gsi/client"]')) {
+      console.log('Google script already loaded');
+      setTimeout(() => this.renderGoogleButton(), 300);
+      return;
+    }
+
     const script = document.createElement('script');
     script.src = 'https://accounts.google.com/gsi/client';
     script.async = true;
     script.defer = true;
-    script.onload = () => this.configureGoogleSDK();
-    document.body.appendChild(script);
+    script.onload = () => {
+      console.log('Google SDK loaded successfully');
+      setTimeout(() => this.initGoogleSDK(), 200);
+    };
+    script.onerror = () => {
+      console.error('Failed to load Google Sign-In SDK');
+      this.errors.general = 'Failed to load Google Sign-In. Please refresh the page.';
+    };
+    document.head.appendChild(script);
   }
 
-  configureGoogleSDK() {
-    google.accounts.id.initialize({
-      client_id:
-        '937265656787-unp24ld8lqsjbu8jh3rvmjct1i0d66ei.apps.googleusercontent.com',
-      callback: (response: any) => this.handleGoogleCallback(response),
-    });
+  initGoogleSDK() {
+    try {
+      if (typeof google === 'undefined' || !google.accounts) {
+        console.error('Google SDK not available');
+        setTimeout(() => this.initGoogleSDK(), 500);
+        return;
+      }
+
+      google.accounts.id.initialize({
+        client_id: this.googleClientId,
+        callback: (response: any) => this.handleGoogleCallback(response),
+        auto_select: false,
+        cancel_on_tap_outside: true,
+        ux_mode: 'popup'
+      });
+
+      console.log('Google SDK initialized successfully');
+      this.renderGoogleButton();
+    } catch (error) {
+      console.error('Error initializing Google SDK:', error);
+    }
   }
 
+  renderGoogleButton() {
+    // Prevent multiple renders
+    if (this.googleButtonRendered) {
+      return;
+    }
+
+    const buttonContainer = document.getElementById('googleButton');
+    if (!buttonContainer) {
+      console.log('Google button container not found, will retry');
+      setTimeout(() => this.renderGoogleButton(), 200);
+      return;
+    }
+
+    try {
+      if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+        console.log('Google SDK not ready, will retry');
+        setTimeout(() => this.renderGoogleButton(), 300);
+        return;
+      }
+
+      // Clear any existing content
+      buttonContainer.innerHTML = '';
+
+      // Render the button
+      google.accounts.id.renderButton(
+        buttonContainer,
+        { 
+          theme: 'outline',
+          size: 'large',
+          type: 'standard',
+          text: 'signin_with',
+          shape: 'rectangular',
+          logo_alignment: 'left',
+          width: 280
+        }
+      );
+
+      this.googleButtonRendered = true;
+      console.log('Google button rendered successfully');
+    } catch (error) {
+      console.error('Error rendering Google button:', error);
+      setTimeout(() => this.renderGoogleButton(), 500);
+    }
+  }
+
+  // Fallback method for clicking the icon
   onGoogleLogin() {
-    google.accounts.id.prompt();
+    const googleButton = document.querySelector('#googleButton iframe') as HTMLElement;
+    if (googleButton) {
+      googleButton.click();
+    } else {
+      console.log('Google button not found, triggering prompt');
+      try {
+        google.accounts.id.prompt();
+      } catch (error) {
+        console.error('Error triggering Google prompt:', error);
+        this.errors.general = 'Please use the "Sign in with Google" button above.';
+      }
+    }
   }
 
   handleGoogleCallback(response: any) {
+    console.log('Google callback received');
     this.isLoading = true;
+    this.errors.general = '';
 
     this.authService.googleLogin(response.credential).subscribe({
       next: (authResponse) => {
+        console.log('Google login successful');
         this.isLoading = false;
         this.handleSuccessfulAuth(authResponse, true);
       },
       error: (err) => {
         this.isLoading = false;
-        console.error('Eroare Google login:', err);
-        this.errors.general = 'Google login failed. Please try again.';
+        console.error('Google login error:', err);
+        this.errors.general = err.error?.message || 'Google login failed. Please try again.';
       },
     });
   }
